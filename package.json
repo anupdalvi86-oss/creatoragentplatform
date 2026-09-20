@@ -1,0 +1,43 @@
+{
+  "name": "creator-agent-platform",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "concurrently -k \"npm:dev:api\" \"npm:dev:web\"",
+    "dev:api": "XDG_CONFIG_HOME=.wrangler/config XDG_CACHE_HOME=.wrangler/cache WRANGLER_LOG_PATH=.wrangler/logs wrangler dev --local --port 8787 --var APP_ENV:local",
+    "dev:web": "vite --host 127.0.0.1",
+    "test": "node --import tsx --test tests/*.test.ts",
+    "eval": "node --import tsx scripts/evaluate.ts",
+    "smoke": "node --import tsx scripts/smoke.ts",
+    "lint": "eslint .",
+    "format": "prettier --write .",
+    "typecheck": "tsc --noEmit",
+    "build": "vite build && XDG_CONFIG_HOME=.wrangler/config XDG_CACHE_HOME=.wrangler/cache WRANGLER_LOG_PATH=.wrangler/logs wrangler deploy --dry-run --outdir .worker-build",
+    "deploy": "XDG_CONFIG_HOME=.wrangler/config XDG_CACHE_HOME=.wrangler/cache WRANGLER_LOG_PATH=.wrangler/logs wrangler deploy",
+    "db:migrate": "XDG_CONFIG_HOME=.wrangler/config XDG_CACHE_HOME=.wrangler/cache WRANGLER_LOG_PATH=.wrangler/logs wrangler d1 migrations apply creator-agent-db --local",
+    "db:migrate:remote": "XDG_CONFIG_HOME=.wrangler/config XDG_CACHE_HOME=.wrangler/cache WRANGLER_LOG_PATH=.wrangler/logs wrangler d1 migrations apply creator-agent-db --remote",
+    "db:seed": "XDG_CONFIG_HOME=.wrangler/config XDG_CACHE_HOME=.wrangler/cache WRANGLER_LOG_PATH=.wrangler/logs wrangler d1 execute creator-agent-db --local --file=seed/demo.sql"
+  },
+  "dependencies": {
+    "react": "^19.1.1",
+    "react-dom": "^19.1.1",
+    "zod": "^4.1.5"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "*",
+    "@eslint/js": "^9.34.0",
+    "@types/node": "^22.18.6",
+    "@types/react": "^19.1.13",
+    "@types/react-dom": "^19.1.9",
+    "@vitejs/plugin-react": "^5.0.2",
+    "concurrently": "^9.2.1",
+    "eslint": "^9.34.0",
+    "globals": "^16.3.0",
+    "prettier": "^3.6.2",
+    "tsx": "^4.20.5",
+    "typescript": "^5.9.2",
+    "typescript-eslint": "^8.42.0",
+    "vite": "^7.1.4",
+    "wrangler": "^4.33.1"
+  }
+}
