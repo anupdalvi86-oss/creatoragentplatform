@@ -69,7 +69,8 @@ function ingredientCategory(name: string): Ingredient['category'] {
 function parseAmount(value: string): { quantity: number; unit: string } | null {
   const normalized = value.toLowerCase().replace(/(\d)(?=[a-z])/g, '$1 ').replace(/\s+/g, ' ').trim();
   const unitMatch = normalized.match(/(?:^|\s)(cups?|tsp|teaspoons?|tbsp|tablespoons?|kg|kilograms?|g|gm|grams?|ml|millilit(?:er|re)s?|pieces?|pods?|cloves?|strands?)\b/);
-  const unit = unitMatch ? unitAliases[unitMatch[1]] || unitMatch[1] : 'piece';
+  const rawUnit = unitMatch?.[1];
+  const unit = rawUnit ? unitAliases[rawUnit] || rawUnit : 'piece';
   const amount = normalized.slice(0, unitMatch?.index ?? normalized.length).replace(/[^0-9./&-]/g, ' ').replace(/\.$/, '').trim();
   const range = amount.match(/^(\d+(?:\.\d+)?)\s*[-–]\s*(\d+(?:\.\d+)?)$/);
   if (range) return { quantity: (Number(range[1]) + Number(range[2])) / 2, unit };
@@ -84,13 +85,13 @@ function parseIngredientLine(line: string): Ingredient | null {
   if (!clean || /^products that i use|^subscribe|^follow me|^https?:/i.test(clean)) return null;
   const pinch = clean.match(/^a pinch of\s+(.+)$/i);
   if (pinch) {
-    const name = canonicalIngredientName(pinch[1]);
+    const name = canonicalIngredientName(pinch[1] ?? '');
     return name ? { name, quantity: 1, unit: 'pinch', category: ingredientCategory(name) } : null;
   }
   const match = clean.match(/^(.+?)\s*[-–—:]\s*(.+)$/);
   if (!match) return null;
-  const name = canonicalIngredientName(match[1]);
-  const amount = parseAmount(match[2]);
+  const name = canonicalIngredientName(match[1] ?? '');
+  const amount = parseAmount(match[2] ?? '');
   if (!name || !amount || amount.quantity <= 0) return null;
   return { name, quantity: amount.quantity, unit: amount.unit, category: ingredientCategory(name) };
 }
