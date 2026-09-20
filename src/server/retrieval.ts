@@ -35,14 +35,14 @@ export async function indexContentEmbedding(env: Env, creatorId: string, item: C
   return true;
 }
 export async function retrieveCreatorKnowledge(env: Env, creatorId: string, query: string): Promise<{ items: ContentItem[]; semanticIds: Set<string>; retrieval: 'structured' | 'hybrid' }> {
-  const items = await listContent(env.DB, creatorId, '', 50);
+  const items = await listContent(env.DB, creatorId, '', 50, env.APP_ENV !== 'production');
   if (!query.trim() || !env.VECTOR || !env.OPENAI_API_KEY) return { items, semanticIds: new Set(), retrieval: 'structured' };
   try {
     const embedded = await embed(env, query);
     const result = await env.VECTOR.query(embedded.values, { namespace: creatorId, topK: 20, returnMetadata: 'indexed' });
     const ids = result.matches.map((match) => String(match.metadata?.contentId || '')).filter(Boolean);
     const semanticIds = new Set<string>();
-    for (const contentId of ids) if (await getContent(env.DB, creatorId, contentId)) semanticIds.add(contentId);
+    for (const contentId of ids) if (await getContent(env.DB, creatorId, contentId, env.APP_ENV !== 'production')) semanticIds.add(contentId);
     await recordEmbedding(env, creatorId, embedded.model, embedded.tokens);
     return { items, semanticIds, retrieval: 'hybrid' };
   } catch (error) {

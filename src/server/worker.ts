@@ -89,10 +89,14 @@ const recipeMetaSchema = z.object({
     .min(1)
     .max(60),
 });
-const belongsInPlan = (item: ContentItem, mealType: "dinner" | "lunch") =>
-  mealType === "lunch"
+const belongsInPlan = (item: ContentItem, mealType: "dinner" | "lunch") => {
+  const searchableText = item.title + " " + item.description + " " + item.tags.join(" ");
+  const dessertOrSnack = /\b(cake|cakes|pastry|pastries|dessert|desserts|sweet|sweets|cookie|cookies|brownie|brownies|muffin|muffins|cupcake|cupcakes|donut|donuts|ice cream|kheer|halwa|ladoo|laddu|barfi|modak|pudding|chocolate|snack|energy bars?)\b/i;
+  if (dessertOrSnack.test(searchableText)) return false;
+  return mealType === "lunch"
     ? item.meta.mealType === "lunch"
     : !["side", "lunch"].includes(item.meta.mealType || "main");
+};
 async function body(request: Request): Promise<unknown> {
   if (Number(request.headers.get("content-length") || 0) > 16_384)
     throw new Error("Request too large");
@@ -193,20 +197,20 @@ async function tenantRoute(
   if (!creator) return fail("Creator not found", 404);
   if (request.method === "GET" && path[0] === "config") return reply(creator);
   if (request.method === "GET" && path[0] === "content" && path[1]) {
-    const item = await getContent(env.DB, creator.id, path[1]);
+    const item = await getContent(env.DB, creator.id, path[1], env.APP_ENV !== "production");
     return item ? reply(item) : fail("Content not found", 404);
   }
   if (request.method === "GET" && path[0] === "content") {
     const q = new URL(request.url).searchParams.get("q") || "";
-    const items = await listContent(env.DB, creator.id, q);
+    const items = await listContent(env.DB, creator.id, q, 30, env.APP_ENV !== "production");
     return reply({ items });
   }
   if (request.method === "GET" && path[0] === "saved") {
     const session = await getSession(request, env, creator.id, slug);
     const rows = await env.DB.prepare(
-      "SELECT c.id,c.creator_id,c.title,c.description,c.source_url,c.thumbnail_url,c.tags_json,c.structured_json,c.provenance_json,c.rights_status,c.published_at FROM saved_content s JOIN content_items c ON c.id=s.content_id AND c.creator_id=s.creator_id WHERE s.creator_id=? AND s.user_id=? AND c.processing_status='ready' AND c.rights_status!='unknown_rights' ORDER BY s.saved_at DESC LIMIT 100",
+      "SELECT c.id,c.creator_id,c.title,c.description,c.source_url,c.thumbnail_url,c.tags_json,c.structured_json,c.provenance_json,c.rights_status,c.published_at FROM saved_content s JOIN content_items c ON c.id=s.content_id AND c.creator_id=s.creator_id WHERE s.creator_id=? AND s.user_id=? AND c.processing_status='ready' AND c.rights_status!='unknown_rights' AND (? OR COALESCE(json_extract(c.provenance_json,'$.kind'),'')!='illustrative') ORDER BY s.saved_at DESC LIMIT 100",
     )
-      .bind(creator.id, session.userId)
+      .bind(creator.id, session.userId, env.APP_ENV !== "production" ? 1 : 0)
       .all<Record<string, unknown>>();
     const gate = await env.DB.prepare(
       "SELECT required_entitlement,free_usage_limit,enabled FROM feature_gates WHERE creator_id=? AND feature=?",
@@ -243,7 +247,7 @@ async function tenantRoute(
     const session = await getSession(request, env, creator.id, slug);
     if (!(await withinRateLimit(env, creator.id, session.userId)))
       return reply({ error: "Too many requests." }, 429, session.cookie);
-    if (!(await getContent(env.DB, creator.id, input.contentId)))
+    if (!(await getContent(env.DB, creator.id, input.contentId, env.APP_ENV !== "production")))
       return fail("Content not found", 404);
     const gate = await env.DB.prepare(
       "SELECT required_entitlement,free_usage_limit,enabled FROM feature_gates WHERE creator_id=? AND feature=?",
@@ -363,7 +367,7 @@ async function tenantRoute(
       return reply({ error: "Too many requests." }, 429, session.cookie);
     if (
       input.contentId &&
-      !(await getContent(env.DB, creator.id, input.contentId))
+      !(await getContent(env.DB, creator.id, input.contentId, env.APP_ENV !== "production"))
     )
       return fail("Content not found", 404);
     await recordEvent(
@@ -516,7 +520,7 @@ async function tenantRoute(
         200,
         session.cookie,
       );
-    const content = (await listContent(env.DB, creator.id, "", 50)).filter(
+    const content = (await listContent(env.DB, creator.id, "", 50, env.APP_ENV !== "production")).filter(
       (item) =>
         item.meta.ingredients.length > 0 &&
         belongsInPlan(item, input.mealType) &&
@@ -620,9 +624,9 @@ async function tenantRoute(
       }>();
     if (!plan) return fail("Plan not found", 404);
     const rows = await env.DB.prepare(
-      "SELECT m.day_number,m.servings,c.id,c.creator_id,c.title,c.description,c.source_url,c.thumbnail_url,c.tags_json,c.structured_json,c.provenance_json,c.rights_status,c.published_at FROM meal_plan_items m JOIN content_items c ON c.id=m.content_id AND c.creator_id=m.creator_id AND c.processing_status='ready' AND c.rights_status!='unknown_rights' WHERE m.creator_id=? AND m.meal_plan_id=? ORDER BY m.day_number",
+      "SELECT m.day_number,m.servings,c.id,c.creator_id,c.title,c.description,c.source_url,c.thumbnail_url,c.tags_json,c.structured_json,c.provenance_json,c.rights_status,c.published_at FROM meal_plan_items m JOIN content_items c ON c.id=m.content_id AND c.creator_id=m.creator_id AND c.processing_status='ready' AND c.rights_status!='unknown_rights' AND (? OR COALESCE(json_extract(c.provenance_json,'$.kind'),'')!='illustrative') WHERE m.creator_id=? AND m.meal_plan_id=? ORDER BY m.day_number",
     )
-      .bind(creator.id, plan.id)
+      .bind(env.APP_ENV !== "production" ? 1 : 0, creator.id, plan.id)
       .all<Record<string, unknown>>();
     return reply(
       {
@@ -676,7 +680,7 @@ async function tenantRoute(
       familySize: number;
       mealType?: "dinner" | "lunch";
     }>(plan.preferences_json);
-    const available = (await listContent(env.DB, creator.id, "", 50)).filter(
+    const available = (await listContent(env.DB, creator.id, "", 50, env.APP_ENV !== "production")).filter(
       (item) =>
         item.id !== current.content_id &&
         item.meta.ingredients.length > 0 &&
@@ -724,9 +728,9 @@ async function tenantRoute(
       .first();
     if (!plan) return fail("Plan not found", 404);
     const rows = await env.DB.prepare(
-      "SELECT c.id,c.creator_id,c.title,c.description,c.source_url,c.thumbnail_url,c.tags_json,c.structured_json,c.provenance_json,c.rights_status,c.published_at,m.servings FROM meal_plan_items m JOIN content_items c ON c.id=m.content_id AND c.creator_id=m.creator_id AND c.processing_status='ready' AND c.rights_status!='unknown_rights' WHERE m.creator_id=? AND m.meal_plan_id=? ORDER BY m.day_number",
+      "SELECT c.id,c.creator_id,c.title,c.description,c.source_url,c.thumbnail_url,c.tags_json,c.structured_json,c.provenance_json,c.rights_status,c.published_at,m.servings FROM meal_plan_items m JOIN content_items c ON c.id=m.content_id AND c.creator_id=m.creator_id AND c.processing_status='ready' AND c.rights_status!='unknown_rights' AND (? OR COALESCE(json_extract(c.provenance_json,'$.kind'),'')!='illustrative') WHERE m.creator_id=? AND m.meal_plan_id=? ORDER BY m.day_number",
     )
-      .bind(creator.id, input.planId)
+      .bind(env.APP_ENV !== "production" ? 1 : 0, creator.id, input.planId)
       .all<Record<string, unknown>>();
     const recipes = rows.results.map((row) => ({
       content: contentFromRow(row as never),

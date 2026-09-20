@@ -12,13 +12,15 @@ export async function getCreator(db: D1Database, slug: string): Promise<Creator 
   const row = await db.prepare('SELECT id,slug,name,category,status,domain,brand_json,agent_json,monetization_json FROM creators WHERE slug=? AND status IN (\'demo\',\'active\')').bind(slug).first<CreatorRow>();
   return row ? creatorFromRow(row) : null;
 }
-export async function getContent(db: D1Database, creatorId: string, contentId: string): Promise<ContentItem | null> {
-  const row = await db.prepare("SELECT id,creator_id,title,description,source_url,thumbnail_url,tags_json,structured_json,provenance_json,rights_status,published_at FROM content_items WHERE creator_id=? AND id=? AND processing_status='ready' AND rights_status!='unknown_rights'").bind(creatorId, contentId).first<ContentRow>();
+export async function getContent(db: D1Database, creatorId: string, contentId: string, includeIllustrative = true): Promise<ContentItem | null> {
+  const visibility = includeIllustrative ? '' : " AND COALESCE(json_extract(provenance_json,'$.kind'),'')!='illustrative'";
+  const row = await db.prepare(`SELECT id,creator_id,title,description,source_url,thumbnail_url,tags_json,structured_json,provenance_json,rights_status,published_at FROM content_items WHERE creator_id=? AND id=? AND processing_status='ready' AND rights_status!='unknown_rights'${visibility}`).bind(creatorId, contentId).first<ContentRow>();
   return row ? contentFromRow(row) : null;
 }
-export async function listContent(db: D1Database, creatorId: string, query = '', limit = 30): Promise<ContentItem[]> {
+export async function listContent(db: D1Database, creatorId: string, query = '', limit = 30, includeIllustrative = true): Promise<ContentItem[]> {
   const term = `%${query.slice(0, 80).replace(/[\\%_]/g, '\\$&')}%`;
-  const rows = await db.prepare("SELECT id,creator_id,title,description,source_url,thumbnail_url,tags_json,structured_json,provenance_json,rights_status,published_at FROM content_items WHERE creator_id=? AND processing_status='ready' AND rights_status!='unknown_rights' AND (title LIKE ? ESCAPE '\\' OR description LIKE ? ESCAPE '\\' OR tags_json LIKE ? ESCAPE '\\' OR structured_json LIKE ? ESCAPE '\\') ORDER BY title LIMIT ?").bind(creatorId, term, term, term, term, Math.min(limit, 50)).all<ContentRow>();
+  const visibility = includeIllustrative ? '' : " AND COALESCE(json_extract(provenance_json,'$.kind'),'')!='illustrative'";
+  const rows = await db.prepare(`SELECT id,creator_id,title,description,source_url,thumbnail_url,tags_json,structured_json,provenance_json,rights_status,published_at FROM content_items WHERE creator_id=? AND processing_status='ready' AND rights_status!='unknown_rights'${visibility} AND (title LIKE ? ESCAPE '\\' OR description LIKE ? ESCAPE '\\' OR tags_json LIKE ? ESCAPE '\\' OR structured_json LIKE ? ESCAPE '\\') ORDER BY title LIMIT ?`).bind(creatorId, term, term, term, term, Math.min(limit, 50)).all<ContentRow>();
   return rows.results.map(contentFromRow);
 }
 export async function recordEvent(db: D1Database, creatorId: string, type: string, feature?: string, userId?: string, metadata: Record<string, unknown> = {}): Promise<void> {

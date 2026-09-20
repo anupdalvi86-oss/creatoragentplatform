@@ -10,7 +10,7 @@ type Screen =
   | "home"
   | "can-make"
   | "plan"
-  | "shopping"
+  | "grocery"
   | "source"
   | "preferences"
   | "saved";
@@ -73,67 +73,75 @@ const slug =
   "anyone-can-cook-demo";
 const base = `/api/${encodeURIComponent(slug)}`;
 const hindiIngredientNames: Record<string, string> = {
-  salt: "namak",
-  semolina: "suji",
-  "wheat flour": "gehun ka aata",
-  flour: "aata",
-  sugar: "cheeni",
-  ghee: "ghee",
-  rice: "chawal",
-  potato: "aloo",
-  onion: "pyaz",
-  tomato: "tamatar",
-  garlic: "lehsun",
-  ginger: "adrak",
-  paneer: "paneer",
-  yogurt: "dahi",
-  curd: "dahi",
-  milk: "doodh",
-  cream: "malai",
-  butter: "makkhan",
-  chickpeas: "chhole",
-  lentils: "dal",
-  cardamom: "elaichi",
-  saffron: "kesar",
-  cumin: "jeera",
-  coriander: "dhaniya",
-  "bell pepper": "shimla mirch",
-  pepper: "kali mirch",
-  cinnamon: "dalchini",
-  cashew: "kaju",
-  almonds: "badam",
-  pistachio: "pista",
-  coconut: "nariyal",
-  banana: "kela",
-  dates: "khajoor",
-  oil: "tel",
-  water: "paani",
-  cucumber: "kheera",
-  tortilla: "roti",
+  salt: "नमक",
+  semolina: "सूजी",
+  "wheat flour": "गेहूँ का आटा",
+  flour: "आटा",
+  sugar: "चीनी",
+  ghee: "घी",
+  rice: "चावल",
+  potato: "आलू",
+  onion: "प्याज़",
+  tomato: "टमाटर",
+  garlic: "लहसुन",
+  ginger: "अदरक",
+  paneer: "पनीर",
+  yogurt: "दही",
+  curd: "दही",
+  milk: "दूध",
+  cream: "मलाई",
+  butter: "मक्खन",
+  chickpeas: "छोले",
+  lentils: "दाल",
+  cardamom: "इलायची",
+  saffron: "केसर",
+  cumin: "जीरा",
+  coriander: "धनिया",
+  "bell pepper": "शिमला मिर्च",
+  pepper: "काली मिर्च",
+  cinnamon: "दालचीनी",
+  cashew: "काजू",
+  almonds: "बादाम",
+  pistachio: "पिस्ता",
+  coconut: "नारियल",
+  banana: "केला",
+  dates: "खजूर",
+  oil: "तेल",
+  water: "पानी",
+  cucumber: "खीरा",
+  tortilla: "रोटी",
 };
 const hindiUnitNames: Record<string, string> = {
-  cup: "cup",
-  cups: "cup",
-  g: "gram",
-  gm: "gram",
-  grams: "gram",
-  kg: "kilo",
-  ml: "ml",
-  tsp: "chhota chammach",
-  tbsp: "bada chammach",
-  each: "piece",
-  piece: "piece",
-  "to taste": "swad anusar",
-  "as needed": "zarurat ke mutabik",
+  cup: "कप",
+  cups: "कप",
+  g: "ग्राम",
+  gm: "ग्राम",
+  grams: "ग्राम",
+  kg: "किलो",
+  ml: "मिलीलीटर",
+  tsp: "छोटा चम्मच",
+  tbsp: "बड़ा चम्मच",
+  each: "पीस",
+  piece: "पीस",
+  "to taste": "स्वादानुसार",
+  "as needed": "ज़रूरत के मुताबिक",
 };
 function localizedIngredient(value: string, language: Language): string {
   if (language === "en") return value;
   const key = value.toLowerCase().replace(/,\s*(cooked|raw)$/i, "").trim();
   return hindiIngredientNames[key] || value;
 }
+function canonicalIngredient(value: string, language: Language): string {
+  if (language === "en") return value;
+  return Object.entries(hindiIngredientNames).find(([, hindi]) => hindi === value)?.[0] || value;
+}
 function localizedUnit(value: string, language: Language): string {
   if (language === "en") return value;
   return hindiUnitNames[value.toLowerCase()] || value;
+}
+function canonicalUnit(value: string, language: Language): string {
+  if (language === "en") return value;
+  return Object.entries(hindiUnitNames).find(([, hindi]) => hindi === value)?.[0] || value;
 }
 function localizedEquipment(value: string, language: Language): string {
   if (language === "en") return value;
@@ -143,6 +151,18 @@ function localizedEquipment(value: string, language: Language): string {
     "air fryer": "air fryer",
   };
   return names[value.toLowerCase()] || value;
+}
+function creatorDisplayName(name: string): string {
+  return name.replace(/\s+with\s+dr\.?\s+alisha\s*$/i, "").trim() || name;
+}
+function isDinnerCandidate(item: ContentItem): boolean {
+  const searchableText = `${item.title} ${item.description} ${item.tags.join(" ")}`;
+  return (
+    !["side", "lunch"].includes(item.meta.mealType || "main") &&
+    !/\b(cake|cakes|pastry|pastries|dessert|desserts|sweet|sweets|cookie|cookies|brownie|brownies|muffin|muffins|cupcake|cupcakes|donut|donuts|ice cream|kheer|halwa|ladoo|laddu|barfi|modak|pudding|chocolate|snack|energy bars?)\b/i.test(
+      searchableText,
+    )
+  );
 }
 function localizedChip(value: string, language: Language): string {
   if (language === "en") return value;
@@ -184,6 +204,15 @@ function RecipeCard({
   why?: string;
   language?: Language;
 }) {
+  const [thumbnailFailed, setThumbnailFailed] = useState(false);
+  const derivedThumbnail = item.sourceUrl.match(
+    /(?:youtube\.com\/(?:watch\?v=|shorts\/)|youtu\.be\/)([a-zA-Z0-9_-]{6,})/,
+  )?.[1]
+    ? `https://i.ytimg.com/vi/${item.sourceUrl.match(
+        /(?:youtube\.com\/(?:watch\?v=|shorts\/)|youtu\.be\/)([a-zA-Z0-9_-]{6,})/,
+      )?.[1]}/hqdefault.jpg`
+    : null;
+  const thumbnail = item.thumbnailUrl || derivedThumbnail;
   const sourceLabel =
     item.provenance.kind === "illustrative"
       ? language === "hi" ? "सैंपल व्यंजन" : "SAMPLE IDEA"
@@ -202,8 +231,13 @@ function RecipeCard({
   return (
     <button className="recipe-card" onClick={onOpen} type="button">
       <span className="recipe-art" aria-hidden="true">
-        {item.thumbnailUrl ? (
-          <img src={item.thumbnailUrl} alt="" loading="lazy" />
+        {thumbnail && !thumbnailFailed ? (
+          <img
+            src={thumbnail}
+            alt=""
+            loading="lazy"
+            onError={() => setThumbnailFailed(true)}
+          />
         ) : (
           <span>{mark}</span>
         )}
@@ -212,7 +246,7 @@ function RecipeCard({
         <span className="eyebrow">
           {sourceLabel} · {detailLabel}
         </span>
-        <strong>{item.title}</strong>
+        <strong title={item.title}>{item.title}</strong>
         <small>{why || item.description}</small>
         <span className="tag-row">
           {item.tags.slice(0, 2).map((tag) => (
@@ -250,6 +284,7 @@ export default function App() {
   const [mealPlanEntries, setMealPlanEntries] = useState<MealPlanEntry[]>([]);
   const [mealSlot, setMealSlot] = useState<MealSlot>("dinner");
   const [mealDay, setMealDay] = useState(3);
+  const [catalogRecipeId, setCatalogRecipeId] = useState("");
   const [mealPlanMessage, setMealPlanMessage] = useState("");
   const [ingredientDrafts, setIngredientDrafts] = useState<EditableIngredient[]>([]);
   const [shopping, setShopping] = useState<Shopping | null>(null);
@@ -323,6 +358,9 @@ export default function App() {
     const stored = localStorage.getItem(`cap-language-${slug}`);
     if (stored === "hi") setLanguage("hi");
   }, []);
+  useEffect(() => {
+    document.documentElement.lang = language;
+  }, [language]);
   useEffect(() => {
     function syncFromHistory(event: PopStateEvent) {
       const historyScreen = (event.state as { screen?: Screen } | null)
@@ -401,6 +439,10 @@ export default function App() {
           .includes(query.toLowerCase()),
       ),
     [content, query],
+  );
+  const catalogRecipes = useMemo(
+    () => content.filter((item) => item.meta.ingredients.length > 0),
+    [content],
   );
   useEffect(() => {
     if (!query.trim() || !creator) return;
@@ -483,21 +525,32 @@ export default function App() {
     setMealPlanEntries(next);
     localStorage.setItem(`cap-meal-plan-${slug}`, JSON.stringify(next));
   }
-  function addSelectedToMealPlan() {
-    if (!selected) return;
+  function addItemToMealPlan(item: ContentItem) {
     const entry: MealPlanEntry = {
-      id: `${selected.id}-${mealDay}-${mealSlot}-${Date.now()}`,
+      id: `${item.id}-${mealDay}-${mealSlot}-${Date.now()}`,
       day: mealDay,
       mealType: mealSlot,
-      content: selected,
+      content: item,
     };
     persistMealPlan(
       [...mealPlanEntries, entry].sort(
         (a, b) => a.day - b.day || a.mealType.localeCompare(b.mealType),
       ),
     );
-    setMealPlanMessage(`${selected.title} added to Day ${mealDay} ${mealSlot}.`);
+    setMealPlanMessage(`${item.title} added to Day ${mealDay} ${mealSlot}.`);
     navigate("plan");
+  }
+  function addSelectedToMealPlan() {
+    if (selected) addItemToMealPlan(selected);
+  }
+  function addCatalogRecipeToMealPlan() {
+    const item = catalogRecipes.find((recipe) => recipe.id === catalogRecipeId);
+    if (!item) {
+      setError(language === "hi" ? "पहले कैटलॉग से व्यंजन चुनें।" : "Choose a catalog recipe first.");
+      return;
+    }
+    addItemToMealPlan(item);
+    setCatalogRecipeId("");
   }
   function removeMealPlanEntry(id: string) {
     persistMealPlan(mealPlanEntries.filter((entry) => entry.id !== id));
@@ -579,7 +632,7 @@ export default function App() {
           ? await api<Shopping>(`/shopping-list/${created.id}`)
           : created,
       );
-      navigate("shopping");
+      navigate("grocery");
     } catch (e) {
       setError((e as Error).message);
     } finally {
@@ -617,7 +670,7 @@ export default function App() {
           checked: 0,
         })),
       });
-      navigate("shopping");
+      navigate("grocery");
     } catch (e) {
       setError((e as Error).message);
     } finally {
@@ -703,7 +756,9 @@ export default function App() {
     const current = plan.items.find((item) => item.day === day);
     const fallback = content.find(
       (item) =>
-        item.id !== current?.content.id && item.meta.ingredients.length > 0,
+        item.id !== current?.content.id &&
+        item.meta.ingredients.length > 0 &&
+        (plan.mealType === "lunch" ? item.meta.mealType === "lunch" : isDinnerCandidate(item)),
     );
     try {
       const replacement = await api<Plan["items"][number]>(
@@ -819,6 +874,22 @@ export default function App() {
       category: item.category,
       checked: 0,
     }));
+  function shareGroceryList() {
+    if (!shoppingItems?.length) {
+      setError(labels.noGroceryItems);
+      return;
+    }
+    const text = [
+      labels.grocery,
+      ...shoppingItems.map((item) => {
+        const amount = item.quantity
+          ? String(item.quantity) + " " + localizedUnit(item.unit, language)
+          : localizedUnit(item.unit, language);
+        return "• " + localizedIngredient(item.ingredient, language) + " — " + amount;
+      }),
+    ].join("\n");
+    window.open("https://wa.me/?text=" + encodeURIComponent(text), "_blank", "noopener,noreferrer");
+  }
   const labels = language === "hi"
     ? {
         favourites: "पसंदीदा",
@@ -835,6 +906,10 @@ export default function App() {
         ideasWord: "विचार।",
         search: "सामग्री, भोजन या मूड खोजें",
         grocery: "किराना सूची",
+        groceryShare: "WhatsApp पर साझा करें",
+        addFromCatalog: "कैटलॉग से व्यंजन जोड़ें",
+        chooseCatalogRecipe: "कैटलॉग से व्यंजन चुनें",
+        noGroceryItems: "अभी कोई किराना सूची नहीं है।",
         listWord: "सूची।",
         checkIngredients: "सामग्री और उपकरण जांचें",
         easyDinners: "स्रोत-आधारित आसान डिनर",
@@ -905,6 +980,10 @@ export default function App() {
         ideasWord: "ideas.",
         search: "Search ingredients, meals, or moods",
         grocery: "Grocery list",
+        groceryShare: "Share on WhatsApp",
+        addFromCatalog: "ADD FROM CATALOG",
+        chooseCatalogRecipe: "Choose a recipe from the catalog",
+        noGroceryItems: "Your grocery list is empty.",
         listWord: "list.",
         checkIngredients: "Check ingredients & equipment",
         easyDinners: "Easy, source-based dinners",
@@ -967,7 +1046,7 @@ export default function App() {
   if (!creator && !error)
     return <main className="loading">Preparing the kitchen…</main>;
   return (
-    <div className="app-shell">
+    <div className={`app-shell language-${language}`}>
       <header className="site-header">
         <button
           className="brand"
@@ -976,7 +1055,7 @@ export default function App() {
         >
           <span className="brand-symbol">AC</span>
           <span>
-            {creator?.name || "Kitchen Companion"}
+            {creatorDisplayName(creator?.name || "Kitchen Companion")}
             <small>
               WITH DR. ALISHA
             </small>
@@ -1014,6 +1093,13 @@ export default function App() {
             onClick={() => navigate("plan")}
           >
             {labels.myPlan} <span>↗</span>
+          </button>
+          <button
+            className="header-link"
+            type="button"
+            onClick={() => navigate("grocery")}
+          >
+            {labels.grocery}
           </button>
         </div>
       </header>
@@ -1398,6 +1484,56 @@ export default function App() {
               <span>→</span>
             </button>
           </div>
+          <section className="meal-plan-add catalog-plan-section">
+            <div>
+              <p className="eyebrow">{labels.addFromCatalog}</p>
+              <strong>{labels.chooseCatalogRecipe}</strong>
+            </div>
+            <div className="meal-plan-fields">
+              <label>
+                {labels.chooseCatalogRecipe}
+                <select
+                  value={catalogRecipeId}
+                  onChange={(event) => setCatalogRecipeId(event.target.value)}
+                >
+                  <option value="">—</option>
+                  {catalogRecipes.map((item) => (
+                    <option key={item.id} value={item.id}>
+                      {item.title}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label>
+                {labels.meal}
+                <select
+                  value={mealSlot}
+                  onChange={(event) => setMealSlot(event.target.value as MealSlot)}
+                >
+                  <option value="breakfast">{labels.breakfast}</option>
+                  <option value="lunch">{labels.lunch}</option>
+                  <option value="snack">{labels.snack}</option>
+                  <option value="dinner">{labels.dinner}</option>
+                </select>
+              </label>
+              <label>
+                {labels.day}
+                <select
+                  value={mealDay}
+                  onChange={(event) => setMealDay(Number(event.target.value))}
+                >
+                  {[1, 2, 3, 4, 5, 6, 7].map((day) => (
+                    <option key={day} value={day}>
+                      {labels.day} {day}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <button className="primary" onClick={addCatalogRecipeToMealPlan}>
+                {labels.addToPlan} <span>→</span>
+              </button>
+            </div>
+          </section>
           {mealPlanEntries.length > 0 && (
             <section className="result-section manual-plan-section">
               <div className="section-head">
@@ -1467,7 +1603,7 @@ export default function App() {
           )}
         </main>
       )}
-      {screen === "shopping" && (
+      {screen === "grocery" && (
         <main className="inner">
           <button className="back" onClick={() => navigate("plan")}>
             ← My plan
@@ -1477,7 +1613,16 @@ export default function App() {
             <h1>
               {labels.grocery.replace(/\s+(सूची|list)$/, "")} <i>{labels.listWord}</i>
             </h1>
+            <button
+              className="secondary grocery-share"
+              type="button"
+              onClick={shareGroceryList}
+              disabled={!shoppingItems?.length}
+            >
+              {labels.groceryShare} ↗
+            </button>
           </div>
+          {shoppingItems?.length ? (
           <div className="shopping-list">
             {shoppingItems?.map((item) => (
               <label key={item.id} className={item.checked ? "checked" : ""}>
@@ -1496,6 +1641,15 @@ export default function App() {
               </label>
             ))}
           </div>
+          ) : (
+            <div className="creator-empty">
+              <strong>{labels.noGroceryItems}</strong>
+              <p>{language === "hi" ? "अपनी योजना से सूची बनाएं या किसी रेसिपी की सामग्री चुनें।" : "Create a list from your plan or select ingredients from a recipe."}</p>
+              <button className="secondary" onClick={() => navigate("plan")}>
+                {labels.myPlan}
+              </button>
+            </div>
+          )}
         </main>
       )}
       {screen === "saved" && (
@@ -1779,8 +1933,11 @@ export default function App() {
                     <input
                       className={ingredient.checked ? "ingredient-name checked" : "ingredient-name"}
                       value={localizedIngredient(ingredient.name, language)}
+                      lang={language}
                       onChange={(event) =>
-                        updateIngredient(ingredient.id, { name: event.target.value })
+                        updateIngredient(ingredient.id, {
+                          name: canonicalIngredient(event.target.value, language),
+                        })
                       }
                       aria-label={language === "hi" ? "सामग्री का नाम" : "Ingredient name"}
                     />
@@ -1798,8 +1955,11 @@ export default function App() {
                     <input
                       className="ingredient-unit"
                       value={localizedUnit(ingredient.unit, language)}
+                      lang={language}
                       onChange={(event) =>
-                        updateIngredient(ingredient.id, { unit: event.target.value })
+                        updateIngredient(ingredient.id, {
+                          unit: canonicalUnit(event.target.value, language),
+                        })
                       }
                       placeholder={labels.unit}
                       aria-label={`${labels.unit} ${localizedIngredient(ingredient.name, language)}`}
@@ -1898,6 +2058,12 @@ export default function App() {
           onClick={() => navigate("saved")}
         >
           ♡<span>{labels.favourites}</span>
+        </button>
+        <button
+          className={screen === "grocery" ? "active" : ""}
+          onClick={() => navigate("grocery")}
+        >
+          🛒<span>{labels.grocery}</span>
         </button>
       </nav>
     </div>
