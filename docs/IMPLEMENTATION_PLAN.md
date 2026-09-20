@@ -34,7 +34,7 @@ Each milestone must remain tenant-isolated and usable without unavailable integr
 | Creator Scout | Creator URL onboarding, three-stage research UX, manual and official YouTube facts, optional Agent Reach bridge, audience/content observations, reviewable hypotheses and ProductSpec | Authorized bridge operation, broader vetted research providers, human validation |
 | Commercial/analytics | Affiliate redirects/clicks, campaigns, sponsor event endpoint, pending ledger, product and AI cost metrics, persisted gate experiments and operator controls | Provider-confirmed conversion/revenue feed, billing, production dashboard QA |
 
-The local MVP workflow is complete and hosted locally. Production readiness is now limited to account-backed integrations, deployment configuration, human review, and the production quality gate. No external metric is fabricated when those integrations are absent.
+The MVP coding slice exists and the PWA is reachable at the Cloudflare URL listed in [deployment](DEPLOYMENT.md). Production integration/readiness still needs account-backed verification, rights review and workflow checks; a reachable shell or Wrangler dry run is not proof of those capabilities. No external metric is fabricated when integrations are absent.
 
 The operator UI now supports branding, Creator URL onboarding, reviewed content metadata, authorized source import, agent policy and tool changes, gate changes, and the three-stage Scout/ProductSpec review. A rights assertion entered by an operator is not independent proof of creator authorization.
 
@@ -42,6 +42,10 @@ The operator UI now supports branding, Creator URL onboarding, reviewed content 
 
 Creator authorization and branding, domain ownership, official source IDs/API access, AI account and budgets, payment provider/prices, privacy notice and retention, affiliate agreements, Voice STT/TTS vendor, Cloudflare account resources. Defaults are local/demo only.
 
-## Verification status after the latest implementation pass
+## Selected specialist-agent program (new; not yet implemented)
 
-The owner asked to skip test runs in this pass. The saved content migration applied locally, and type checking passed after the authorized import, campaign, and admin lifecycle edits. The full quality gate and browser review are still required before deployment. No deployment was attempted.
+The owner chose the 32 roles and explicit exclusions in [AGENT_CATALOG.md](AGENT_CATALOG.md). Treat them as a **backlog**, not a request to scaffold 32 empty agents. The next implementation starts with a creator-scoped admin task/run foundation and one reversible draft-only role, then authorized content/transcripts and review, then customer roles, Hermes engineering workflows and operational feedback. See the catalog for role-by-role status and acceptance criteria and the [Hermes handoff](HERMES_HANDOFF.md) for a copyable first task. New work must use additive migrations, protect existing routes and pass the full local quality gate. Provisioning remote infrastructure, pushing and deploying require separate approval.
+
+## Latest observed verification (2026-09-20)
+
+The last observed `main` commit was `9155d8d`; a parallel task reported full checks and Cloudflare deployment. Hermes subsequently reported 14/14 tests, typecheck, lint and a dry-run build on its clone, with **no** push/deploy. A public HTTP response from the Cloudflare PWA was verified on 2026-09-20. Re-run the checks and verify the production D1/Access/secrets and end-to-end workflows before asserting the next release is ready. Historical statements elsewhere in this plan describe older implementation passes, not current deployment state.

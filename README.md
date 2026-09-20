@@ -2,6 +2,8 @@
 
 A multi-tenant Cloudflare Worker and React PWA foundation. The cooking workspace is a reusable creator product surface backed by tenant-scoped content, research, planning, and monetization modules.
 
+For Hermes/Telegram development, start at [AGENTS.md](AGENTS.md) and the [Hermes handoff](docs/HERMES_HANDOFF.md). The [selected agent catalog](docs/AGENT_CATALOG.md) lists proposed specialists, current implementation status, explicit exclusions and delivery order. These documents are **plans**, not claims that every agent is deployed.
+
 ## Run locally
 
 Requires Node 22+ and npm. From the repository root:
@@ -56,7 +58,7 @@ npm run deploy             # only after deployment setup and review
 
 ## What is still external or limited
 
-The local product is complete for the reusable cooking workflow and creator research handoff. Production still requires deployment configuration and external account decisions: creator authorization, verified domains, live AI/YouTube credentials, Vectorize (optional), speech provider, payment account, affiliate agreements, and sponsor integration. Checkout and automatic premium grants remain provider adapters. Scout opportunity and ProductSpec outputs are reviewable hypotheses; they do not invent audience metrics. Other verticals need their own UX and tool modules. See the [implementation plan](docs/IMPLEMENTATION_PLAN.md) for the remaining production path.
+The cooking and Scout foundations exist, and a Cloudflare production URL is serving the PWA, but a public response does not verify all production integrations or creator authorization. Live AI/YouTube credentials, Access policy, authorized source content, optional Vectorize, speech provider, payments and agreements must be checked in the target account. Checkout and automatic premium grants remain provider adapters. Scout opportunity and ProductSpec outputs are reviewable hypotheses; they do not invent audience metrics. Other verticals need their own UX and tool modules. The 32 selected specialist roles are **not** all built; see the [catalog](docs/AGENT_CATALOG.md) and [implementation plan](docs/IMPLEMENTATION_PLAN.md).
 
 ## Handoff guide
 
@@ -67,5 +69,7 @@ The local product is complete for the reusable cooking workflow and creator rese
 5. Free/premium gates, affiliates and revenue: [MONETIZATION.md](docs/MONETIZATION.md).
 6. D1 setup, credentials, Cloudflare Access and deployment: [DEPLOYMENT.md](docs/DEPLOYMENT.md).
 7. Known limitations and next milestones: [IMPLEMENTATION_PLAN.md](docs/IMPLEMENTATION_PLAN.md).
+8. Hermes checkout, production boundary and copyable first task: [HERMES_HANDOFF.md](docs/HERMES_HANDOFF.md).
+9. Selected roles, exclusions, status and phased definition of done: [AGENT_CATALOG.md](docs/AGENT_CATALOG.md).
 
 For another cooking creator, create a creator in `/admin`, add its Creator URL, then use the Scout tab to research the profile, record audience/content observations, and generate a reviewable opportunity and ProductSpec. Add approved content via an official YouTube channel or authorized metadata import. Imports start in review; an operator must inspect rights and metadata before marking them ready. Activation requires ready authorized, uploaded, or licensed content. The same Worker and PWA serve every slug. For another vertical, add a vertical-specific interface and tool definitions before enabling that category; see [architecture](docs/ARCHITECTURE.md).

@@ -9,3 +9,7 @@ Affiliate links are created by operators and redirected through `/go/:creator/:l
 `events` contains feature-level, privacy-conscious events. `ai_requests` and `ai_usage` record provider, model, policy, latency, tokens, status and estimated cost. The admin dashboard groups cost by feature and flags unpriced embedding calls. Estimates depend on the operator-maintained model price schedule. Do not use these estimates as invoices.
 
 Protected experiment routes can create two to four gate variants for `AI_TEXT`, `AI_VOICE` or `MEAL_PLAN`. The Worker assigns each adult session once, persists the assignment, and applies the variant's free allowance server-side. The operator UI now supports creating drafts and changing experiment status; billing terms and provider-confirmed conversion events are still required before activating commercial pricing experiments.
+
+## Scope of the specialist-agent initiative
+
+The owner excluded all Growth and Commercial specialist agents from the current [catalog](AGENT_CATALOG.md). Existing gates, analytics, affiliate and revenue code remain in place; the new orchestrator must not automate pricing, payment status, campaigns, affiliate claims or sponsor activation. Cost monitoring in scope is limited to safe provider/resource usage and budget reporting, not revenue optimization. Production release still requires a human check of current entitlements and commercial behavior.

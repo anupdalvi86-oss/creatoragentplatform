@@ -10,6 +10,8 @@ All tenant-owned tables carry `creator_id`. IDs are opaque strings. D1 migration
 
 `agents` and `agent_tools` configure role, prompt version, enabled tools and budgets. `ai_requests` and `ai_usage` record task, policy, provider, model, latency, token counts, estimated cost and status.
 
+These tables describe a cooking-agent configuration today; they do not contain a generic task queue, run steps or transcript records. The planned specialist implementation should add **new additive migrations** for a role/task/run lifecycle rather than rewriting existing demo rows or treating all roles as active. Suggested contracts (final SQL must be reviewed): a task with `creator_id`, role, input reference, idempotency key, initiator, state and timestamps; append-only run/step outcomes with model/tool/cost/error metadata; review decision with reviewer and time; an authorized media/transcript source with external ID, rights basis, language, time offsets, version, processing/review state and checksum. Put large media outside D1; keep D1 pointers and validated metadata. Distinguish "rights asserted" from "rights verified"; never elevate source rights on an AI judgment alone.
+
 ## People and access
 
 `users` represents an adult-owned pseudonymous session or future account. `user_preferences` contains diet, equipment, family size and child age ranges. `plans`, `entitlements`, `feature_gates`, `usage_limits` and `user_entitlements` implement configurable access. `experiments` and `experiment_assignments` persist variants.
@@ -29,3 +31,5 @@ All tenant-owned tables carry `creator_id`. IDs are opaque strings. D1 migration
 ## Ownership and deletion
 
 All public queries are scoped by resolved creator. User-owned records are additionally scoped by a server-issued signed session ID. Admin operations require explicit tenant scope and role. Deletion can cascade per creator after a separate audited admin operation; this MVP exposes no destructive tenant deletion endpoint.
+
+All new tasks, runs, transcripts and approval reads/writes must include `creator_id` predicates and the appropriate operator/user authority. Use uniqueness constraints for retries and source deduplication. Avoid storing provider keys, complete prompts, or unnecessary personal data in run records. See [catalog](AGENT_CATALOG.md) for the rollout and [handoff](HERMES_HANDOFF.md) for deployment separation.

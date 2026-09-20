@@ -12,6 +12,14 @@ The first release is a reusable cooking workspace with illustrative seed content
 - **Sources:** `ContentItem` records rights status, original URL, provenance and processing state. Retrieval filters by creator and publication rights before it reaches an agent. Answers carry content IDs, source links, confidence and warnings. Unsupported questions produce an explicit evidence warning.
 - **Operations:** native D1 migrations, seeded demo data, Wrangler environments, structured logs, unit/integration tests and a production build.
 
+## Planned specialist-agent topology (not deployed)
+
+The [agent catalog](AGENT_CATALOG.md) splits **product roles** (tenant-scoped consumer/content tasks) from **engineering roles** (Hermes working on Git branches). Do not connect Telegram/Hermes directly to customer secrets, entitlement decisions, or arbitrary public Worker tool execution. The product's `agents` table is configuration, not a general dispatcher; the admin UI currently edits a cooking agent and the runtime has fixed cooking tools.
+
+The first product slice should add an authenticated task submission path, persisted task/run lifecycle, allowlisted role/tool registry and a reversible draft-only operation. Later, authorized content intake can fan out through a queue into a durable transcript/extract/review workflow; reviewed source records then feed tenant-scoped retrieval. Queue, workflow, upload storage and dedicated audio processing are **design options**, not current bindings. Add them only after verifying workload, Cloudflare account resources, permissions and cost. A failed/retried job must not duplicate content or bypass review.
+
+Hermes can propose specs, edit a branch and run checks; a human approves rights, publishing, remote schema changes and releases. These are two execution planes sharing a codebase, not one unrestricted agent swarm. See [handoff](HERMES_HANDOFF.md) for the observed deployment and [runtime](AGENT_RUNTIME.md) for existing caps.
+
 ## Boundaries
 
 | Boundary | Responsibility | Current implementation / extension |
@@ -43,3 +51,5 @@ Parameterized SQL, request validation, tenant predicates, same-origin mutation c
 ## Trade-offs
 
 The single Worker keeps deployment and tracing simple. It can be split only when traffic or ownership requires it. D1 full-text search is sufficient for the first small catalog and is the failure path for Vectorize. Browser speech recognition has uneven support, so typed input remains first-class. Payment and research adapters are intentionally replaceable; no checkout or scraping is represented as live without credentials and authorization. The initial mock AI creates deterministic wording from retrieved records and does not claim model reasoning.
+
+The proposed many-role catalog should be delivered as a few tested workflows sharing infrastructure. One role per deployed service or per model key would add operational complexity without adding capability.
