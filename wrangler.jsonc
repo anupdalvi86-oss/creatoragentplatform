@@ -3,6 +3,6 @@
   "main": "src/server/worker.ts",
   "compatibility_date": "2026-09-01",
   "assets": { "directory": "./dist", "binding": "ASSETS", "not_found_handling": "single-page-application", "run_worker_first": ["/api/*", "/go/*"] },
-  "d1_databases": [{ "binding": "DB", "database_name": "creator-agent-db", "database_id": "00000000-0000-0000-0000-000000000000", "migrations_dir": "migrations" }],
+  "d1_databases": [{ "binding": "DB", "database_name": "creator-agent-db", "database_id": "c6b36835-396d-41b4-be41-79b9d44efb8d", "migrations_dir": "migrations" }],
   "vars": { "APP_ENV": "production", "AI_PRIMARY": "mock", "AI_FALLBACK": "mock", "AI_MODEL_CHEAP": "gpt-4.1-nano", "AI_MODEL_STANDARD": "gpt-4.1-mini", "AI_MODEL_REASONING": "o4-mini" }
 }
