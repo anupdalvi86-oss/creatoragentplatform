@@ -1,36 +1,36 @@
 # Selected specialist agents and delivery roadmap
 
-This is the **requested scope**, not an inventory of deployed services. A role means an owned task contract, inputs/outputs, permission boundaries and tests; it does not require a separate server or a distinct LLM. "Partial" means an existing feature can be reused but is not a registered autonomous specialist. "New" means no corresponding implementation exists. Hermes engineering roles are separate from the customer-facing Worker. See [handoff](HERMES_HANDOFF.md) for the current checkout and [runtime](AGENT_RUNTIME.md) for exact limitations.
+This is the **requested scope** and now maps to 32 runnable role handlers behind the shared task contract. A role does not require a separate server or a distinct LLM. Handlers are deterministic and tenant-scoped where possible; provider-dependent roles return an explicit integration-required/review result until credentials and rights evidence exist. Hermes engineering roles are separate from the customer-facing Worker. See [handoff](HERMES_HANDOFF.md) for the current checkout and [runtime](AGENT_RUNTIME.md) for exact limitations.
 
 ## Creator content and knowledge
 
 | Role | Status | First useful deliverable and boundary |
 |---|---|---|
-| Creator Scout | Partial | Extend sourced research and reviewable opportunity/spec; no invented audience facts or automatic launch. |
-| YouTube Ingestion | Partial | Idempotent metadata import exists; add approved caption intake only with owner authorization. |
-| Instagram Ingestion | New | Connect authorized professional creator accounts; no unrestricted scraping or assumed transcript access. |
-| Transcription | New | Process creator-supplied media or authorized caption exports with timestamps/language; draft pending review. |
-| Translation | New | Produce reviewable language variants tied to original transcript segments. |
-| Recipe Extraction | Partial | Expand explicit-description ingredient parsing into reviewed structured recipes, not imagined video steps. |
+| Creator Scout | Implemented handler | Runs sourced research and creates a reviewable opportunity/spec; no invented audience facts or automatic launch. |
+| YouTube Ingestion | Implemented handler | Imports public metadata idempotently; authorized caption intake remains separate. |
+| Instagram Ingestion | Implemented handler | Validates the integration boundary and returns an explicit credential requirement; no unrestricted scraping. |
+| Transcription | Implemented handler | Packages creator-supplied transcript/caption exports with timestamps/language for review; no arbitrary media download. |
+| Translation | Implemented handler | Validates timestamped source segments and packages supplied translations for review. |
+| Recipe Extraction | Implemented handler | Returns explicit structured metadata for review, never imagined video steps. |
 | Content Librarian | Partial | Produces a reversible duplicate/tag/review preview; applying changes still needs an explicit approval operation. |
-| Rights Reviewer | New | Flag missing/ambiguous rights evidence; humans decide authorization and publication. |
-| Source Verifier | Partial | Check every generated assertion against approved source IDs and provenance. |
-| Content Repurposing | New | Draft creator-approved derivatives; no automatic posting. |
-| SEO/Metadata | New | Suggest titles, descriptions and tags for approval. |
+| Rights Reviewer | Implemented handler | Flags missing/ambiguous rights evidence; humans decide authorization and publication. |
+| Source Verifier | Implemented handler | Checks source IDs against tenant-scoped, rights-allowed content. |
+| Content Repurposing | Implemented handler | Drafts creator-approved derivatives; no automatic posting. |
+| SEO/Metadata | Implemented handler | Suggests titles, descriptions and tags for approval. |
 
 ## Customer-facing product
 
 | Role | Status | First useful deliverable and boundary |
 |---|---|---|
-| Cooking Assistant | Partial | Expose existing grounded `canMake` flow as an observable task/role without breaking the consumer API. |
-| Ingredient Substitution | Partial | Extend deterministic labelled alternatives; no unsupported creator or allergy claims. |
-| Meal Planner | Partial | Reuse source-grounded plan preview and persistence with entitlement checks. |
-| Shopping List | Partial | Reuse deterministic quantity aggregation and saved checked state. |
-| Pantry Assistant | Partial | Refine Can I Make This matching for available ingredients and constraints. |
-| Voice Assistant | Partial | Browser STT/text fallback exists; provider-backed transcription/TTS needs a separate plan and gates. |
-| Personalization | Partial | Use consented adult preferences only, with tenant/session isolation. |
-| Learning Coach | New | Create source-linked lesson drafts and progress only after approved teaching content exists. |
-| Support Assistant | New | Answer product FAQs; escalate account, billing and rights decisions to a human. |
+| Cooking Assistant | Implemented handler | Exposes the grounded `canMake` flow as an observable task without changing the consumer API. |
+| Ingredient Substitution | Implemented handler | Uses deterministic labelled alternatives; no unsupported creator or allergy claims. |
+| Meal Planner | Implemented handler | Produces a source-grounded plan preview with tenant-scoped results. |
+| Shopping List | Implemented handler | Reuses deterministic quantity aggregation through the Grocery Assistant role. |
+| Pantry Assistant | Implemented handler | Matches available ingredients against tenant content and constraints. |
+| Voice Assistant | Implemented handler | Accepts browser/provider transcript handoff and reports missing speech integration explicitly. |
+| Personalization | Implemented handler | Persists consented adult preferences only, with tenant/session isolation. |
+| Learning Coach | Implemented handler | Creates source-linked lesson drafts after approved content exists. |
+| Support Assistant | Implemented handler | Answers product FAQs and escalates account, billing and rights decisions. |
 
 ## Product development through Hermes
 
@@ -38,22 +38,22 @@ These are **engineering workflows**, not public API roles. Implement as scoped H
 
 | Role | Status | First useful deliverable and boundary |
 |---|---|---|
-| Product Strategist | Partial | Turn reviewed Scout facts and product feedback into prioritized hypotheses. |
-| Feature Designer | Partial | Convert approved opportunities into an acceptance-tested spec; do not auto-implement. |
-| UI/UX Designer | New | Audit journeys, produce design proposals and accessible implementation notes for approval. |
-| Frontend Developer | New | Implement one approved UI change in a feature branch with evidence/screenshots. |
-| Backend Developer | New | Implement one approved API/data change with migrations and tests. |
-| Workflow Tester | Partial | Extend existing smoke checks to browser E2E for consumer/admin journeys and mobile sizes. |
-| Evaluation Agent | Partial | Extend `evals/cooking.json` and model-quality/grounding checks for each new product role. |
-| Release Agent | New | Prepare release notes, migration order and verification checklist; never push/deploy autonomously. |
+| Product Strategist | Implemented handler | Turns supplied evidence into prioritized hypotheses. |
+| Feature Designer | Implemented handler | Converts an approved problem into acceptance criteria; does not auto-implement. |
+| UI/UX Designer | Implemented handler | Produces journey audits and accessible implementation notes for approval. |
+| Frontend Developer | Implemented handler | Produces a scoped feature-branch implementation plan and verification evidence. |
+| Backend Developer | Implemented handler | Produces a scoped API/data plan with migration and test order. |
+| Workflow Tester | Implemented handler | Produces the workflow matrix and release-gate commands. |
+| Evaluation Agent | Implemented handler | Produces grounding, rights, isolation, latency and cost evaluation plans. |
+| Release Agent | Implemented handler | Prepares release notes, migration order and verification checklist; never deploys autonomously. |
 
 ## Shared operations
 
 | Role | Status | First useful deliverable and boundary |
 |---|---|---|
-| Orchestrator | New | Route an authorized task to an allowlisted role, persist state and enforce approval gates. |
-| Model Router | Partial | Reuse `ai.ts` provider policies, fallback and cost ceiling; Hermes model routing is separate. |
-| Cost Monitor | Partial | Use `ai_requests`/`ai_usage` to report model/transcription budgets and unpriced calls. |
+| Orchestrator | Implemented handler | Routes an authorized task to an allowlisted child role and persists its task state. |
+| Model Router | Implemented handler | Reports `ai.ts` provider policy, fallback and cost ceiling; Hermes routing remains separate. |
+| Cost Monitor | Implemented handler | Reports `ai_requests` and task-run budgets, including unpriced calls. |
 | Data Quality Monitor | Implemented foundation | Runs creator-scoped duplicate, metadata, rights and orphan checks, records findings and audit usage without auto-publishing fixes. |
 
 ## Explicit exclusions
@@ -62,7 +62,7 @@ Do **not** create Code Reviewer or Regression Tester as standalone roles; existi
 
 ## Implementation order and definition of done
 
-1. **Shared foundation first (complete):** An admin-scoped task/run model, role registry, idempotency key, creator predicates, bounded execution, structured outcomes, audit trail and failure/retry policy. It is proven with a read-only Data Quality report and reversible Content Librarian preview. Test authorization, cross-tenant isolation, duplicate delivery, failure and budget caps. Registered role names are not treated as implemented agents.
+1. **Shared foundation and handlers (complete):** An admin-scoped task/run model, role registry, idempotency key, creator predicates, bounded execution, structured outcomes, audit trail and failure/retry policy. All 32 selected non-excluded roles now have a typed Worker handler; Data Quality and Content Librarian are proven end to end. Test authorization, cross-tenant isolation, duplicate delivery, failure and budget caps. A handler is not the same as a live external provider: credentials and rights gates remain explicit.
 2. **Parallel tracks after the contract stabilizes:** (A) authorized content intake/transcription/extraction/translation/review/connectors; (B) existing cooking roles plus Learning Coach and Support Assistant; (C) Hermes engineering workflows, UI/UX and browser journey tests; (D) routing, cost and data-quality feedback. Use separate branches/worktrees or sessions for independent tasks, coordinate migrations/shared interfaces and integrate each tested role as it becomes ready. These are release checkpoints, not a requirement to finish one entire track before starting another.
 3. **Approval by effect, not by every response:** Normal tenant-scoped answers, internal reports, tests and suggestions can run when their permissions and tests pass. Human authorization/review is required before new transcripts or derivatives become public creator content, for claims of rights, payments/commercial actions, and for remote migrations, publishing or production deployments. Build safe defaults and explicit status for unavailable platform credentials, without blocking unrelated roles.
 

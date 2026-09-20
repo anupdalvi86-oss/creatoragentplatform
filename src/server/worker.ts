@@ -39,6 +39,7 @@ import {
   listDataQualityFindings,
   type TaskSubmission,
 } from "./agentTasks";
+import { runSpecialistTask } from "./specialistAgents";
 
 const reply = (data: unknown, status = 200, cookie?: string) =>
   new Response(JSON.stringify(data), {
@@ -1839,7 +1840,7 @@ async function adminRoute(
     const roles = await listRoles(env, category, true);
     return reply({ roles });
   }
-  if (request.method === "POST" && path[0] === "agent-tasks" && path[1]) {
+  if (request.method === "POST" && path[0] === "agent-tasks" && path[1] && !path[2]) {
     const creatorId = path[1];
     const input = z
       .object({
@@ -1931,7 +1932,24 @@ async function adminRoute(
         return reply({ taskId, status: 'failed', error: message }, 500);
       }
     }
-    return fail(`Role execution not implemented: ${task.roleId}`, 501);
+    const role = await env.DB.prepare("SELECT role_key FROM agent_roles WHERE id=?").bind(task.roleId).first<{ role_key: string }>();
+    if (!role) return fail(`Role not found: ${task.roleId}`, 404);
+    await updateTaskStatus(env, taskId, 'running');
+    const runId = await startTaskRun(env, taskId, 1);
+    try {
+      const execution = await runSpecialistTask(env, creatorId, role.role_key, task.input);
+      await completeTaskRun(env, runId, execution.result, {
+        provider: 'deterministic', model: `${role.role_key}-v1`,
+        inputTokens: 0, outputTokens: 0, estimatedCostUsd: 0,
+      });
+      await updateTaskStatus(env, taskId, execution.status, execution.result);
+      return reply({ taskId, status: execution.status, roleKey: role.role_key, result: execution.result });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unknown error';
+      await failTaskRun(env, runId, message);
+      await updateTaskStatus(env, taskId, 'failed', undefined, message);
+      return reply({ taskId, status: 'failed', roleKey: role.role_key, error: message }, 500);
+    }
   }
   if (request.method === "POST" && path[0] === "data-quality" && path[1] === "check") {
     const input = z

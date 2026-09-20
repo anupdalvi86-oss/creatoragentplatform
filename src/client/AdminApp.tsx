@@ -880,11 +880,23 @@ export default function AdminApp() {
   }
   async function submitAgentTask(roleKey: string) {
     await run(async () => {
+      const defaultInput: Record<string, unknown> =
+        roleKey === "creator_scout"
+          ? { url: selected?.creatorUrl || "", category: selected?.category || "cooking" }
+          : roleKey === "youtube_ingestion"
+            ? { channelUrl: selected?.creatorUrl || "" }
+            : roleKey === "cooking_assistant"
+              ? { goal: "Find a quick recipe", ingredients: [], familySize: 2 }
+              : roleKey === "ingredient_substitution"
+                ? { ingredient: "potato" }
+                : roleKey === "meal_planner"
+                  ? { days: 3, familySize: 2 }
+                  : {};
       await admin(`/agent-tasks/${selectedId}`, "POST", {
         roleKey,
         initiatorType: "admin",
         initiatorId: "admin-ui",
-        input: { trigger: "admin-ui", requestedAt: new Date().toISOString() },
+        input: { ...defaultInput, trigger: "admin-ui", requestedAt: new Date().toISOString() },
         idempotencyKey: `admin-ui:${roleKey}:${Date.now()}`,
       });
       await refreshAgentOperations();
@@ -1215,6 +1227,10 @@ export default function AdminApp() {
                         {role.requiresApproval ? " · approval required" : ""}
                         <br />
                         <small>{role.description}</small>
+                        <br />
+                        <button disabled={busy} onClick={() => submitAgentTask(role.roleKey)}>
+                          Submit safe task
+                        </button>
                       </p>
                     )) : <p>No agent roles found. Apply migration 0003 to the active database.</p>}
                   </section>
@@ -1227,8 +1243,7 @@ export default function AdminApp() {
                         </p>
                         {task.errorMessage && <p>{task.errorMessage}</p>}
                         {task.result && <pre>{JSON.stringify(task.result, null, 2)}</pre>}
-                        {(task.status === "queued" || task.status === "awaiting_review") &&
-                          (task.roleId === "role-dqm-001" || task.roleId === "role-lib-001") && (
+                        {(task.status === "queued" || task.status === "awaiting_review") && (
                             <button disabled={busy} onClick={() => runAgentTask(task.id)}>
                               Run task
                             </button>
