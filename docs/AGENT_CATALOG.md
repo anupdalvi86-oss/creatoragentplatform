@@ -12,7 +12,7 @@ This is the **requested scope**, not an inventory of deployed services. A role m
 | Transcription | New | Process creator-supplied media or authorized caption exports with timestamps/language; draft pending review. |
 | Translation | New | Produce reviewable language variants tied to original transcript segments. |
 | Recipe Extraction | Partial | Expand explicit-description ingredient parsing into reviewed structured recipes, not imagined video steps. |
-| Content Librarian | New | Deduplicate, tag and organize tenant content as reversible drafts. |
+| Content Librarian | Partial | Produces a reversible duplicate/tag/review preview; applying changes still needs an explicit approval operation. |
 | Rights Reviewer | New | Flag missing/ambiguous rights evidence; humans decide authorization and publication. |
 | Source Verifier | Partial | Check every generated assertion against approved source IDs and provenance. |
 | Content Repurposing | New | Draft creator-approved derivatives; no automatic posting. |
@@ -54,7 +54,7 @@ These are **engineering workflows**, not public API roles. Implement as scoped H
 | Orchestrator | New | Route an authorized task to an allowlisted role, persist state and enforce approval gates. |
 | Model Router | Partial | Reuse `ai.ts` provider policies, fallback and cost ceiling; Hermes model routing is separate. |
 | Cost Monitor | Partial | Use `ai_requests`/`ai_usage` to report model/transcription budgets and unpriced calls. |
-| Data Quality Monitor | New | Detect stale, duplicate, incomplete or unsourced tenant records without auto-publishing fixes. |
+| Data Quality Monitor | Implemented foundation | Runs creator-scoped duplicate, metadata, rights and orphan checks, records findings and audit usage without auto-publishing fixes. |
 
 ## Explicit exclusions
 
@@ -62,7 +62,7 @@ Do **not** create Code Reviewer or Regression Tester as standalone roles; existi
 
 ## Implementation order and definition of done
 
-1. **Shared foundation first:** An admin-scoped task/run model, role registry, idempotency key, creator predicates, bounded execution, structured outcomes, audit trail and failure/retry policy. Prove it end to end with one useful read-only Data Quality report or reversible Content Librarian operation. Its internal output can be immediately usable; it need not be a permanent draft. Test authorization, cross-tenant isolation, duplicate delivery, failure and budget caps. Do not seed 32 names as if implemented.
+1. **Shared foundation first (complete):** An admin-scoped task/run model, role registry, idempotency key, creator predicates, bounded execution, structured outcomes, audit trail and failure/retry policy. It is proven with a read-only Data Quality report and reversible Content Librarian preview. Test authorization, cross-tenant isolation, duplicate delivery, failure and budget caps. Registered role names are not treated as implemented agents.
 2. **Parallel tracks after the contract stabilizes:** (A) authorized content intake/transcription/extraction/translation/review/connectors; (B) existing cooking roles plus Learning Coach and Support Assistant; (C) Hermes engineering workflows, UI/UX and browser journey tests; (D) routing, cost and data-quality feedback. Use separate branches/worktrees or sessions for independent tasks, coordinate migrations/shared interfaces and integrate each tested role as it becomes ready. These are release checkpoints, not a requirement to finish one entire track before starting another.
 3. **Approval by effect, not by every response:** Normal tenant-scoped answers, internal reports, tests and suggestions can run when their permissions and tests pass. Human authorization/review is required before new transcripts or derivatives become public creator content, for claims of rights, payments/commercial actions, and for remote migrations, publishing or production deployments. Build safe defaults and explicit status for unavailable platform credentials, without blocking unrelated roles.
 

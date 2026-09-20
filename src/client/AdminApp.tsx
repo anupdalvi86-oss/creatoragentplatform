@@ -78,6 +78,37 @@ type RevenueRow = {
   status: string;
   occurred_at: string;
 };
+type AgentRoleRow = {
+  id: string;
+  roleKey: string;
+  roleName: string;
+  description: string;
+  category: string;
+  enabled: boolean;
+  requiresApproval: boolean;
+};
+type AgentTaskRow = {
+  id: string;
+  roleId: string;
+  status: string;
+  priority: number;
+  input: Record<string, unknown>;
+  result: Record<string, unknown> | null;
+  errorMessage: string | null;
+  createdAt: string;
+  updatedAt: string;
+};
+type QualityFindingRow = {
+  id: string;
+  findingType: string;
+  severity: string;
+  resourceType: string;
+  resourceId: string | null;
+  details: Record<string, unknown>;
+  suggestedAction: string | null;
+  reviewedAt: string | null;
+  createdAt: string;
+};
 const cookingTools = [
   "searchCreatorKnowledge",
   "findSubstitution",
@@ -567,7 +598,7 @@ export default function AdminApp() {
   const [creators, setCreators] = useState<Creator[]>([]);
   const [selectedId, setSelectedId] = useState("");
   const [tab, setTab] = useState<
-    "overview" | "content" | "agent" | "scout" | "monetization"
+    "overview" | "content" | "agent" | "operations" | "scout" | "monetization"
   >("overview");
   const [metrics, setMetrics] = useState<Metrics | null>(null);
   const [gates, setGates] = useState<Gate[]>([]);
@@ -578,6 +609,9 @@ export default function AdminApp() {
   const [campaigns, setCampaigns] = useState<CampaignRow[]>([]);
   const [affiliates, setAffiliates] = useState<AffiliateRow[]>([]);
   const [revenue, setRevenue] = useState<RevenueRow[]>([]);
+  const [agentRoles, setAgentRoles] = useState<AgentRoleRow[]>([]);
+  const [agentTasks, setAgentTasks] = useState<AgentTaskRow[]>([]);
+  const [qualityFindings, setQualityFindings] = useState<QualityFindingRow[]>([]);
   const [experimentFeature, setExperimentFeature] = useState("AI_VOICE");
   const [experimentControl, setExperimentControl] = useState(2);
   const [experimentVariant, setExperimentVariant] = useState(5);
@@ -666,8 +700,11 @@ export default function AdminApp() {
       admin<CampaignRow[]>(`/campaigns/${selectedId}`),
       admin<AffiliateRow[]>(`/affiliate/${selectedId}`),
       admin<RevenueRow[]>(`/revenue/${selectedId}`),
+      admin<{ roles: AgentRoleRow[] }>("/agent-roles"),
+      admin<{ tasks: AgentTaskRow[] }>(`/agent-tasks/${selectedId}`),
+      admin<{ findings: QualityFindingRow[] }>(`/data-quality/findings/${selectedId}`),
     ])
-      .then(([m, g, c, s, a, e, campaignsData, links, ledger]) => {
+      .then(([m, g, c, s, a, e, campaignsData, links, ledger, roles, tasks, findings]) => {
         setMetrics(m);
         setGates(g);
         setContent(c);
@@ -677,6 +714,9 @@ export default function AdminApp() {
         setCampaigns(campaignsData);
         setAffiliates(links);
         setRevenue(ledger);
+        setAgentRoles(roles.roles);
+        setAgentTasks(tasks.tasks);
+        setQualityFindings(findings.findings);
       })
       .catch((error: Error) => setMessage(error.message));
   }, [selectedId, token]);
@@ -828,6 +868,43 @@ export default function AdminApp() {
       setCreators(await admin<Creator[]>("/creators"));
     }, "Agent settings saved for future requests.");
   }
+  async function refreshAgentOperations() {
+    const [roles, tasks, findings] = await Promise.all([
+      admin<{ roles: AgentRoleRow[] }>("/agent-roles"),
+      admin<{ tasks: AgentTaskRow[] }>(`/agent-tasks/${selectedId}`),
+      admin<{ findings: QualityFindingRow[] }>(`/data-quality/findings/${selectedId}`),
+    ]);
+    setAgentRoles(roles.roles);
+    setAgentTasks(tasks.tasks);
+    setQualityFindings(findings.findings);
+  }
+  async function submitAgentTask(roleKey: string) {
+    await run(async () => {
+      await admin(`/agent-tasks/${selectedId}`, "POST", {
+        roleKey,
+        initiatorType: "admin",
+        initiatorId: "admin-ui",
+        input: { trigger: "admin-ui", requestedAt: new Date().toISOString() },
+        idempotencyKey: `admin-ui:${roleKey}:${Date.now()}`,
+      });
+      await refreshAgentOperations();
+    }, `${roleKey} task submitted.`);
+  }
+  async function runAgentTask(taskId: string) {
+    await run(async () => {
+      await admin(`/agent-tasks/${selectedId}/${taskId}/run`, "POST");
+      await refreshAgentOperations();
+    }, "Agent task completed. Review its result below.");
+  }
+  async function runQualityCheck() {
+    await run(async () => {
+      await admin(`/data-quality/check`, "POST", {
+        creatorId: selectedId,
+        initiatorId: "admin-ui",
+      });
+      await refreshAgentOperations();
+    }, "Data quality check completed.");
+  }
   return (
     <div className="admin-shell">
       <header className="admin-header">
@@ -929,6 +1006,7 @@ export default function AdminApp() {
                     "overview",
                     "content",
                     "agent",
+                    "operations",
                     "scout",
                     "monetization",
                   ] as const
@@ -1102,6 +1180,73 @@ export default function AdminApp() {
                       Provider credentials and fallback are configured as Worker
                       secrets and environment variables.
                     </p>
+                  </section>
+                </div>
+              )}
+              {tab === "operations" && (
+                <div className="admin-panels">
+                  <section>
+                    <h2>Specialist agent operations</h2>
+                    <p>
+                      These are creator-scoped, auditable tasks. Data Quality is
+                      read-only; Content Librarian creates a reversible preview
+                      and never changes public content without approval.
+                    </p>
+                    <div className="admin-editor-actions">
+                      <button disabled={busy} onClick={runQualityCheck}>
+                        Run data quality check
+                      </button>
+                      <button
+                        disabled={busy}
+                        onClick={() => submitAgentTask("content_librarian")}
+                      >
+                        Preview content organization
+                      </button>
+                      <button disabled={busy} onClick={refreshAgentOperations}>
+                        Refresh operations
+                      </button>
+                    </div>
+                  </section>
+                  <section>
+                    <h2>Registered roles</h2>
+                    {agentRoles.length ? agentRoles.map((role) => (
+                      <p key={role.id}>
+                        <strong>{role.roleName}</strong> · {role.category}
+                        {role.requiresApproval ? " · approval required" : ""}
+                        <br />
+                        <small>{role.description}</small>
+                      </p>
+                    )) : <p>No agent roles found. Apply migration 0003 to the active database.</p>}
+                  </section>
+                  <section>
+                    <h2>Task history</h2>
+                    {agentTasks.length ? agentTasks.map((task) => (
+                      <div className="admin-spec" key={task.id}>
+                        <p>
+                          <strong>{task.roleId}</strong> · {task.status} · {task.createdAt}
+                        </p>
+                        {task.errorMessage && <p>{task.errorMessage}</p>}
+                        {task.result && <pre>{JSON.stringify(task.result, null, 2)}</pre>}
+                        {(task.status === "queued" || task.status === "awaiting_review") &&
+                          (task.roleId === "role-dqm-001" || task.roleId === "role-lib-001") && (
+                            <button disabled={busy} onClick={() => runAgentTask(task.id)}>
+                              Run task
+                            </button>
+                          )}
+                      </div>
+                    )) : <p>No specialist tasks submitted yet.</p>}
+                  </section>
+                  <section>
+                    <h2>Data quality findings</h2>
+                    {qualityFindings.length ? qualityFindings.map((finding) => (
+                      <div className="admin-spec" key={finding.id}>
+                        <p>
+                          <strong>{finding.severity}</strong> · {finding.findingType} · {finding.resourceId || finding.resourceType}
+                        </p>
+                        <small>{finding.suggestedAction || "Review finding."}</small>
+                        <pre>{JSON.stringify(finding.details, null, 2)}</pre>
+                      </div>
+                    )) : <p>No findings recorded for this creator.</p>}
                   </section>
                 </div>
               )}

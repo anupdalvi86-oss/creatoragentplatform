@@ -1,5 +1,5 @@
 import type { Env } from "./db";
-import { id, json } from "./db";
+import { id } from "./db";
 
 // Agent Task/Run Foundation - Shared contracts for specialist-agent catalog
 // Supports: role registry, task submission, durable state, audit trail, idempotency, bounded execution
@@ -82,6 +82,22 @@ export interface DataQualityFinding {
   resolution: string | null;
   createdAt: string;
 }
+
+export interface ContentLibrarianPreview {
+  operationId: string;
+  duplicateGroups: Array<{ externalId: string; contentIds: string[] }>;
+  untaggedContentIds: string[];
+  reviewContentIds: string[];
+  affectedContentIds: string[];
+}
+
+type ContentLibrarianRow = {
+  id: string;
+  external_id: string | null;
+  tags_json: string | null;
+  rights_status: string;
+  processing_status: string;
+};
 
 // Role Registry: allowlisted roles with bounded execution parameters
 export async function getRole(env: Env, roleKey: string): Promise<AgentRole | null> {
@@ -349,6 +365,66 @@ export async function failTaskRun(
   ).bind('failed', errorMessage, runId).run();
 }
 
+// Content Librarian: produce a reversible, read-only organization preview.
+// Applying tags or merges belongs behind an explicit approval endpoint.
+export async function runContentLibrarianPreview(
+  env: Env,
+  creatorId: string,
+  taskId: string,
+): Promise<ContentLibrarianPreview> {
+  const { results } = await env.DB.prepare(
+    `SELECT id, external_id, tags_json, rights_status, processing_status
+     FROM content_items WHERE creator_id = ? ORDER BY created_at DESC LIMIT 100`
+  ).bind(creatorId).all<ContentLibrarianRow>();
+
+  const byExternalId = new Map<string, string[]>();
+  const untaggedContentIds: string[] = [];
+  const reviewContentIds: string[] = [];
+  for (const row of results || []) {
+    if (row.external_id) {
+      const ids = byExternalId.get(row.external_id) || [];
+      ids.push(row.id);
+      byExternalId.set(row.external_id, ids);
+    }
+    let tags: unknown = [];
+    try {
+      tags = row.tags_json ? JSON.parse(row.tags_json) : [];
+    } catch {
+      tags = [];
+    }
+    if (!Array.isArray(tags) || tags.length === 0) untaggedContentIds.push(row.id);
+    if (row.rights_status === 'unknown_rights' || row.processing_status !== 'ready') {
+      reviewContentIds.push(row.id);
+    }
+  }
+
+  const duplicateGroups = [...byExternalId.entries()]
+    .filter(([, contentIds]) => contentIds.length > 1)
+    .map(([externalId, contentIds]) => ({ externalId, contentIds }));
+  const affectedContentIds = [...new Set([
+    ...duplicateGroups.flatMap((group) => group.contentIds),
+    ...untaggedContentIds,
+    ...reviewContentIds,
+  ])];
+  const operationId = id();
+  const preview = { duplicateGroups, untaggedContentIds, reviewContentIds, affectedContentIds };
+  await env.DB.prepare(
+    `INSERT INTO content_librarian_operations
+      (id,creator_id,task_id,operation_type,status,affected_content_ids,before_state_json,after_state_json)
+     VALUES(?,?,?,?,?,?,?,?)`
+  ).bind(
+    operationId,
+    creatorId,
+    taskId,
+    'reorganize',
+    'preview',
+    JSON.stringify(affectedContentIds),
+    JSON.stringify(preview),
+    JSON.stringify({}),
+  ).run();
+  return { operationId, ...preview };
+}
+
 // Data Quality Monitor: Detect issues in tenant data
 export async function recordDataQualityFinding(
   env: Env,
@@ -397,9 +473,7 @@ export async function listDataQualityFindings(
     resolution: string | null; created_at: string;
   }>();
   
-  console.log('DEBUG listDataQualityFindings results:', results.length);
   return results.map(row => {
-    console.log('DEBUG mapping row:', { id: row.id, details_json: row.details_json });
     return {
     id: row.id,
     creatorId: row.creator_id,
@@ -432,10 +506,7 @@ export async function runDataQualityCheck(
      GROUP BY external_id HAVING count > 1`
   ).bind(creatorId).all<{ external_id: string; count: number; content_ids: string }>();
   
-  console.log('DEBUG duplicateContent:', duplicateContent.results.length, duplicateContent.results);
-  
   for (const dup of duplicateContent.results || []) {
-    console.log('DEBUG processing dup:', dup);
     const findingId = await recordDataQualityFinding(env, {
       creatorId,
       taskId: taskId || null,
@@ -530,10 +601,8 @@ export async function runDataQualityCheck(
   // Check for incomplete rights
   const incompleteRights = await env.DB.prepare(
     `SELECT id, title, rights_status FROM content_items 
-     WHERE creator_id = ? AND rights_status = 'unknown_rights'`
-  ).bind(creatorId).all<{ id: string; title: string }>();
-  
-  console.log('DEBUG incompleteRights:', incompleteRights.results.length, incompleteRights.results);
+     WHERE creator_id = ? AND rights_status = ?`
+  ).bind(creatorId, 'unknown_rights').all<{ id: string; title: string }>();
   
   for (const item of incompleteRights.results || []) {
     const findingId = await recordDataQualityFinding(env, {

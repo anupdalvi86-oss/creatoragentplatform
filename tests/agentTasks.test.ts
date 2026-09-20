@@ -30,7 +30,12 @@ function createMockDb() {
     creators: [],
   } as Record<string, Array<Record<string, unknown>>>;
   
-  let idCounter = 0;
+  const boundValueForClause = (sql: string, values: unknown[], clause: RegExp): unknown => {
+    const match = clause.exec(sql);
+    if (!match || match.index === undefined || match[1] !== '?') return match?.[1]?.replace(/^['"]|['"]$/g, '');
+    const placeholdersBefore = (sql.slice(0, match.index).match(/\?/g) || []).length;
+    return values[placeholdersBefore];
+  };
   
   return {
     tables,
@@ -159,7 +164,6 @@ function createMockDb() {
               if (sql.includes('INSERT INTO data_quality_findings')) {
                 // SQL has 12 bound values + CURRENT_TIMESTAMP for created_at
                 const [findingId, creatorId, taskId, findingType, severity, resourceType, resourceId, detailsJson, suggestedAction, reviewedAt, reviewedBy, resolution] = values as unknown[];
-                console.log('DEBUG INSERT finding:', { findingId, creatorId, findingType });
                 tables.data_quality_findings!.push({
                   id: findingId, creator_id: creatorId, task_id: taskId, finding_type: findingType,
                   severity, resource_type: resourceType, resource_id: resourceId,
@@ -170,44 +174,36 @@ function createMockDb() {
               return {};
             },
             async all<T>(): Promise<{ results: T[] }> {
-              console.log('DEBUG all() SQL start:', sql.substring(0, 30));
               if (sql.includes('FROM agent_roles WHERE')) {
                 const category = values[0] as string;
                 return { results: tables.agent_roles!.filter(r => r.category === category && r.enabled === 1) as T[] };
               }
               if (sql.includes('FROM agent_tasks WHERE')) {
-                console.log('DEBUG FROM agent_tasks WHERE matched');
-                const [creatorId, status] = values as string[];
+                const creatorId = boundValueForClause(sql, values, /creator_id\s*=\s*(\?|'.*?')/i) as string;
                 let results = tables.agent_tasks!.filter(t => t.creator_id === creatorId);
+                const status = boundValueForClause(sql, values, /status\s*=\s*(\?|'.*?')/i) as string | undefined;
                 if (status) {
                   results = results.filter(t => t.status === status);
                 }
                 return { results: results.slice(0, 50) as T[] };
               }
-              if (sql.includes('data_quality_findings')) {
-                console.log('DEBUG data_quality_findings SQL:', sql);
-                console.log('DEBUG pattern match:', sql.includes('FROM data_quality_findings WHERE creator_id'));
-              }
               if (sql.includes('FROM data_quality_findings WHERE creator_id')) {
-                console.log('DEBUG ENTERED data_quality_findings block');
                 const creatorId = values[0] as string;
-                console.log('DEBUG SELECT findings:', { creatorId, count: tables.data_quality_findings!.length });
                 let results = tables.data_quality_findings!.filter(f => f.creator_id === creatorId);
-                console.log('DEBUG filtered:', results.length, results);
                 // Check if there's a severity filter (values[1] would be severity if present, not limit)
                 // The SQL has LIMIT ? at the end, so values[1] could be the limit
                 // We need to check if the SQL has 'severity = ?' to determine if values[1] is severity
                 if (sql.includes('severity = ?') && values[1]) {
                   results = results.filter(f => f.severity === values[1]);
                 }
-                console.log('DEBUG returning:', results.length);
                 return { results: results.slice(0, 100) as T[] };
               }
-              if (sql.includes('content_items WHERE creator_id') && !sql.includes('HAVING')) {
-                const creatorId = values[0] as string;
+              if (/FROM content_items\s+WHERE creator_id/i.test(sql) && !sql.includes('HAVING')) {
+                const creatorId = boundValueForClause(sql, values, /creator_id\s*=\s*(\?|'.*?')/i) as string;
                 let results = tables.content_items!.filter(i => i.creator_id === creatorId);
-                if (sql.includes('rights_status')) {
-                  results = results.filter(i => i.rights_status === 'unknown_rights');
+                const rightsStatus = boundValueForClause(sql, values, /rights_status\s*=\s*(\?|'.*?')/i) as string | undefined;
+                if (rightsStatus) {
+                  results = results.filter(i => i.rights_status === rightsStatus);
                 }
                 return { results: results as T[] };
               }
@@ -222,7 +218,7 @@ function createMockDb() {
                   grouped[key].push(item);
                 }
                 const duplicates = Object.entries(grouped)
-                  .filter(([_, items]) => items.length > 1)
+                  .filter(([, items]) => items.length > 1)
                   .map(([externalId, items]) => ({
                     external_id: externalId,
                     count: items.length,
@@ -230,7 +226,6 @@ function createMockDb() {
                   }));
                 return { results: duplicates as T[] };
               }
-              console.log('DEBUG all() unmatched:', sql.substring(0, 50));
               return { results: [] };
             },
           };
@@ -533,8 +528,6 @@ test('data quality check detects duplicate content', async () => {
   );
   
   const { findings, summary } = await runDataQualityCheck(env, 'creator-one');
-  
-  console.log('DEBUG findings:', findings.length, findings);
   
   assert.ok(findings.length > 0);
   assert.ok(summary.total > 0);

@@ -32,6 +32,10 @@ import {
   updateTaskStatus,
   listRoles,
   runDataQualityCheck,
+  runContentLibrarianPreview,
+  startTaskRun,
+  completeTaskRun,
+  failTaskRun,
   listDataQualityFindings,
   type TaskSubmission,
 } from "./agentTasks";
@@ -1859,13 +1863,6 @@ async function adminRoute(
     const { task, created, previousStatus } = await submitTask(env, submission);
     return reply({ task, created, previousStatus }, created ? 201 : 200);
   }
-  if (request.method === "GET" && path[0] === "agent-tasks" && path[1]) {
-    const creatorId = path[1];
-    const status = request.headers.get("x-status") as 'queued' | 'running' | 'awaiting_review' | 'completed' | 'failed' | 'cancelled' | undefined;
-    const roleId = request.headers.get("x-role-id") || undefined;
-    const tasks = await listTasks(env, { creatorId, status, roleId }, 50);
-    return reply({ tasks });
-  }
   if (request.method === "GET" && path[0] === "agent-tasks" && path[1] && path[2]) {
     const taskId = path[2]!;
     const task = await getTask(env, taskId);
@@ -1873,9 +1870,23 @@ async function adminRoute(
     if (task.creatorId !== path[1]) return fail("Task does not belong to creator", 403);
     return reply({ task });
   }
-  if (request.method === "POST" && path[0] === "agent-tasks" && path[1] && path[2] === "run") {
+  if (request.method === "GET" && path[0] === "agent-tasks" && path[1]) {
+    const creatorId = path[1];
+    const status = request.headers.get("x-status") as 'queued' | 'running' | 'awaiting_review' | 'completed' | 'failed' | 'cancelled' | undefined;
+    const roleId = request.headers.get("x-role-id") || undefined;
+    const tasks = await listTasks(env, { creatorId, status, roleId }, 50);
+    return reply({ tasks });
+  }
+  if (
+    request.method === "POST" &&
+    path[0] === "agent-tasks" &&
+    path[1] &&
+    ((path[2] === "run" && path[3]) || (path[2] && path[3] === "run"))
+  ) {
     const creatorId = path[1]!;
-    const taskId = path[3]!;
+    // Canonical URL: /agent-tasks/:creatorId/:taskId/run.
+    // Keep /agent-tasks/:creatorId/run/:taskId for compatibility.
+    const taskId = path[2] === "run" ? path[3]! : path[2]!;
     const task = await getTask(env, taskId);
     if (!task) return fail("Task not found", 404);
     if (task.creatorId !== creatorId) return fail("Task does not belong to creator", 403);
@@ -1885,21 +1896,40 @@ async function adminRoute(
     // Data Quality Monitor execution
     if (task.roleId === 'role-dqm-001') {
       await updateTaskStatus(env, taskId, 'running');
+      const runId = await startTaskRun(env, taskId, 1);
       try {
         const { findings, summary } = await runDataQualityCheck(env, creatorId, taskId);
+        await completeTaskRun(env, runId, { findings, summary }, {
+          provider: 'deterministic', model: 'data-quality-v1',
+          inputTokens: 0, outputTokens: 0, estimatedCostUsd: 0,
+        });
         await updateTaskStatus(env, taskId, 'completed', { findings, summary });
         return reply({ taskId, status: 'completed', findings, summary });
       } catch (error) {
         const message = error instanceof Error ? error.message : 'Unknown error';
+        await failTaskRun(env, runId, message);
         await updateTaskStatus(env, taskId, 'failed', undefined, message);
         return reply({ taskId, status: 'failed', error: message }, 500);
       }
     }
     // Content Librarian execution (preview mode)
     if (task.roleId === 'role-lib-001') {
-      // This would be implemented with reversible operations
-      // For now, mark as awaiting_review since it requires approval
-      return reply({ taskId, status: 'awaiting_review', message: 'Content Librarian requires approval before applying changes' });
+      await updateTaskStatus(env, taskId, 'running');
+      const runId = await startTaskRun(env, taskId, 1);
+      try {
+        const preview = await runContentLibrarianPreview(env, creatorId, taskId);
+        await completeTaskRun(env, runId, { ...preview }, {
+          provider: 'deterministic', model: 'content-librarian-v1',
+          inputTokens: 0, outputTokens: 0, estimatedCostUsd: 0,
+        });
+        await updateTaskStatus(env, taskId, 'awaiting_review', { preview });
+        return reply({ taskId, status: 'awaiting_review', preview });
+      } catch (error) {
+        const message = error instanceof Error ? error.message : 'Unknown error';
+        await failTaskRun(env, runId, message);
+        await updateTaskStatus(env, taskId, 'failed', undefined, message);
+        return reply({ taskId, status: 'failed', error: message }, 500);
+      }
     }
     return fail(`Role execution not implemented: ${task.roleId}`, 501);
   }
@@ -1920,14 +1950,27 @@ async function adminRoute(
       priority: 3,
     });
     if (task.status === 'queued') {
-      const { findings, summary } = await runDataQualityCheck(env, input.creatorId, task.id);
-      await updateTaskStatus(env, task.id, 'completed', { findings, summary });
-      return reply({ task, created, findings, summary });
+      await updateTaskStatus(env, task.id, 'running');
+      const runId = await startTaskRun(env, task.id, 1);
+      try {
+        const { findings, summary } = await runDataQualityCheck(env, input.creatorId, task.id);
+        await completeTaskRun(env, runId, { findings, summary }, {
+          provider: 'deterministic', model: 'data-quality-v1',
+          inputTokens: 0, outputTokens: 0, estimatedCostUsd: 0,
+        });
+        await updateTaskStatus(env, task.id, 'completed', { findings, summary });
+        return reply({ task: await getTask(env, task.id), created, findings, summary });
+      } catch (error) {
+        const message = error instanceof Error ? error.message : 'Unknown error';
+        await failTaskRun(env, runId, message);
+        await updateTaskStatus(env, task.id, 'failed', undefined, message);
+        return fail(message, 500);
+      }
     }
     return reply({ task, created, message: 'Task already existed' });
   }
   if (request.method === "GET" && path[0] === "data-quality" && path[1] === "findings") {
-    const creatorId = request.headers.get("x-creator-id");
+    const creatorId = path[2] || request.headers.get("x-creator-id");
     if (!creatorId) return fail("x-creator-id header required", 400);
     const severity = request.headers.get("x-severity") as 'info' | 'warning' | 'error' | undefined;
     const findingType = request.headers.get("x-finding-type") || undefined;
