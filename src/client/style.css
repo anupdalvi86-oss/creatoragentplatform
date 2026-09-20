@@ -263,6 +263,10 @@ footer { max-width: 1240px; margin: 0 auto; padding: 34px 20px 100px; color: #93
   .ingredient-row .ingredient-quantity, .ingredient-row .ingredient-unit { grid-column: 2; }
   .ingredient-row .ingredient-unit { grid-row: 2; }
   .ingredient-row .ingredient-remove { grid-column: 3; grid-row: 1; }
+  .form-row { flex-direction: column; gap: 0; }
+  .form-card { width: 100%; }
+  .source-hero h1 { overflow-wrap: anywhere; }
+  .source-columns aside { width: 100%; }
 }
 
 /* Anyone Can Cook with Dr. Alisha brand direction. */
