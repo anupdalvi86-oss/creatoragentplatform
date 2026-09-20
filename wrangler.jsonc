@@ -4,5 +4,11 @@
   "compatibility_date": "2026-09-01",
   "assets": { "directory": "./dist", "binding": "ASSETS", "not_found_handling": "single-page-application", "run_worker_first": ["/api/*", "/go/*"] },
   "d1_databases": [{ "binding": "DB", "database_name": "creator-agent-db", "database_id": "c6b36835-396d-41b4-be41-79b9d44efb8d", "migrations_dir": "migrations" }],
+  "queues": {
+    "producers": [{ "binding": "AGENT_TASK_QUEUE", "queue": "creator-agent-task-queue" }],
+    "consumers": [{ "queue": "creator-agent-task-queue", "max_batch_size": 10, "max_batch_timeout": 5, "max_retries": 3, "dead_letter_queue": "creator-agent-task-dlq", "max_concurrency": 10 }]
+  },
+  "workflows": [{ "binding": "AGENT_TASK_WORKFLOW", "name": "creator-agent-task-workflow", "class_name": "AgentTaskWorkflow", "limits": { "steps": 64 }, "concurrency": { "limit": 20 } }],
+  "triggers": { "crons": ["0 * * * *"] },
   "vars": { "APP_ENV": "production", "AI_PRIMARY": "openai", "AI_FALLBACK": "mock", "AI_MODEL_CHEAP": "gpt-4.1-nano", "AI_MODEL_STANDARD": "gpt-4.1-mini", "AI_MODEL_REASONING": "o4-mini", "AI_PRICING_JSON": "{\"gpt-4.1-nano\":{\"inputPerMillion\":0.1,\"outputPerMillion\":0.4},\"gpt-4.1-mini\":{\"inputPerMillion\":0.4,\"outputPerMillion\":1.6},\"o4-mini\":{\"inputPerMillion\":1.1,\"outputPerMillion\":4.4}}" }
 }

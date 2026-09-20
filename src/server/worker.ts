@@ -10,6 +10,7 @@ import {
   json,
   listContent,
   recordEvent,
+  type AgentQueueMessage,
   type Env,
 } from "./db";
 import {
@@ -32,14 +33,15 @@ import {
   updateTaskStatus,
   listRoles,
   runDataQualityCheck,
-  runContentLibrarianPreview,
   startTaskRun,
   completeTaskRun,
   failTaskRun,
   listDataQualityFindings,
+  listTaskHandoffs,
   type TaskSubmission,
 } from "./agentTasks";
-import { runSpecialistTask } from "./specialistAgents";
+import { dispatchTask, runTaskById, advanceTaskHandoff } from "./agentTaskRunner";
+export { AgentTaskWorkflow } from "./agentWorkflow";
 
 const reply = (data: unknown, status = 200, cookie?: string) =>
   new Response(JSON.stringify(data), {
@@ -1850,6 +1852,7 @@ async function adminRoute(
         input: z.record(z.string(), z.unknown()).default({}),
         idempotencyKey: z.string().min(1).max(200).optional(),
         priority: z.number().int().min(1).max(10).default(5),
+        autoStart: z.boolean().default(true),
       })
       .parse(await body(request));
     const submission: TaskSubmission = {
@@ -1862,9 +1865,19 @@ async function adminRoute(
       priority: input.priority,
     };
     const { task, created, previousStatus } = await submitTask(env, submission);
-    return reply({ task, created, previousStatus }, created ? 201 : 200);
+    if (created && input.autoStart) {
+      await dispatchTask(env, task.id);
+      return reply({ task, created, previousStatus, dispatched: true }, 202);
+    }
+    return reply({ task, created, previousStatus, dispatched: false }, created ? 201 : 200);
   }
   if (request.method === "GET" && path[0] === "agent-tasks" && path[1] && path[2]) {
+    if (path[3] === "handoffs") {
+      const parentTask = await getTask(env, path[2]);
+      if (!parentTask) return fail("Task not found", 404);
+      if (parentTask.creatorId !== path[1]) return fail("Task does not belong to creator", 403);
+      return reply({ handoffs: await listTaskHandoffs(env, parentTask.id) });
+    }
     const taskId = path[2]!;
     const task = await getTask(env, taskId);
     if (!task) return fail("Task not found", 404);
@@ -1894,62 +1907,46 @@ async function adminRoute(
     if (task.status !== 'queued' && task.status !== 'awaiting_review') {
       return fail(`Task cannot be run: ${task.status}`, 409);
     }
-    // Data Quality Monitor execution
-    if (task.roleId === 'role-dqm-001') {
-      await updateTaskStatus(env, taskId, 'running');
-      const runId = await startTaskRun(env, taskId, 1);
-      try {
-        const { findings, summary } = await runDataQualityCheck(env, creatorId, taskId);
-        await completeTaskRun(env, runId, { findings, summary }, {
-          provider: 'deterministic', model: 'data-quality-v1',
-          inputTokens: 0, outputTokens: 0, estimatedCostUsd: 0,
-        });
-        await updateTaskStatus(env, taskId, 'completed', { findings, summary });
-        return reply({ taskId, status: 'completed', findings, summary });
-      } catch (error) {
-        const message = error instanceof Error ? error.message : 'Unknown error';
-        await failTaskRun(env, runId, message);
-        await updateTaskStatus(env, taskId, 'failed', undefined, message);
-        return reply({ taskId, status: 'failed', error: message }, 500);
-      }
+    if (env.AGENT_TASK_WORKFLOW || env.AGENT_TASK_QUEUE) {
+      await dispatchTask(env, taskId);
+      return reply({ taskId, status: 'queued', dispatched: true }, 202);
     }
-    // Content Librarian execution (preview mode)
-    if (task.roleId === 'role-lib-001') {
-      await updateTaskStatus(env, taskId, 'running');
-      const runId = await startTaskRun(env, taskId, 1);
-      try {
-        const preview = await runContentLibrarianPreview(env, creatorId, taskId);
-        await completeTaskRun(env, runId, { ...preview }, {
-          provider: 'deterministic', model: 'content-librarian-v1',
-          inputTokens: 0, outputTokens: 0, estimatedCostUsd: 0,
-        });
-        await updateTaskStatus(env, taskId, 'awaiting_review', { preview });
-        return reply({ taskId, status: 'awaiting_review', preview });
-      } catch (error) {
-        const message = error instanceof Error ? error.message : 'Unknown error';
-        await failTaskRun(env, runId, message);
-        await updateTaskStatus(env, taskId, 'failed', undefined, message);
-        return reply({ taskId, status: 'failed', error: message }, 500);
-      }
+    const execution = await runTaskById(env, taskId);
+    return reply(execution, execution.status === 'failed' ? 500 : 200);
+  }
+  if (
+    request.method === "POST" &&
+    path[0] === "agent-tasks" &&
+    path[1] &&
+    path[2] &&
+    path[3] === "approve"
+  ) {
+    const input = z.object({
+      approverType: z.enum(['admin', 'creator', 'system']).default('admin'),
+      approverId: z.string().min(1).max(100),
+      decision: z.enum(['approved', 'rejected']),
+      reason: z.string().max(500).optional(),
+    }).parse(await body(request));
+    const task = await getTask(env, path[2]);
+    if (!task) return fail("Task not found", 404);
+    if (task.creatorId !== path[1]) return fail("Task does not belong to creator", 403);
+    await env.DB.prepare(
+      `INSERT INTO agent_task_approvals(id,task_id,approver_type,approver_id,decision,reason)
+       VALUES(?,?,?,?,?,?)`
+    ).bind(id(), task.id, input.approverType, input.approverId, input.decision, input.reason || null).run();
+    if (input.decision === 'rejected') {
+      await updateTaskStatus(env, task.id, 'cancelled', task.result || undefined, input.reason || 'Approval rejected');
+      return reply({ taskId: task.id, status: 'cancelled' });
     }
-    const role = await env.DB.prepare("SELECT role_key FROM agent_roles WHERE id=?").bind(task.roleId).first<{ role_key: string }>();
-    if (!role) return fail(`Role not found: ${task.roleId}`, 404);
-    await updateTaskStatus(env, taskId, 'running');
-    const runId = await startTaskRun(env, taskId, 1);
-    try {
-      const execution = await runSpecialistTask(env, creatorId, role.role_key, task.input);
-      await completeTaskRun(env, runId, execution.result, {
-        provider: 'deterministic', model: `${role.role_key}-v1`,
-        inputTokens: 0, outputTokens: 0, estimatedCostUsd: 0,
-      });
-      await updateTaskStatus(env, taskId, execution.status, execution.result);
-      return reply({ taskId, status: execution.status, roleKey: role.role_key, result: execution.result });
-    } catch (error) {
-      const message = error instanceof Error ? error.message : 'Unknown error';
-      await failTaskRun(env, runId, message);
-      await updateTaskStatus(env, taskId, 'failed', undefined, message);
-      return reply({ taskId, status: 'failed', roleKey: role.role_key, error: message }, 500);
+    if (task.result) {
+      const role = await env.DB.prepare("SELECT role_key FROM agent_roles WHERE id=?").bind(task.roleId).first<{ role_key: string }>();
+      await updateTaskStatus(env, task.id, 'completed', task.result);
+      const nextTaskId = role ? await advanceTaskHandoff(env, { ...task, status: 'completed' }, role.role_key, task.result) : undefined;
+      return reply({ taskId: task.id, status: 'completed', nextTaskId });
     }
+    await updateTaskStatus(env, task.id, 'queued');
+    await dispatchTask(env, task.id);
+    return reply({ taskId: task.id, status: 'queued', dispatched: true }, 202);
   }
   if (request.method === "POST" && path[0] === "data-quality" && path[1] === "check") {
     const input = z
@@ -2044,6 +2041,35 @@ async function adminRoute(
 }
 
 export default {
+  async queue(batch: MessageBatch<AgentQueueMessage>, env: Env): Promise<void> {
+    await Promise.all(batch.messages.map(async (message) => {
+      try {
+        await runTaskById(env, message.body.taskId);
+        // Business failures are persisted; retry only infrastructure exceptions.
+        message.ack();
+      } catch {
+        message.retry({ delaySeconds: Math.min(300, 10 * Math.max(1, message.attempts)) });
+      }
+    }));
+  },
+  async scheduled(controller: ScheduledController, env: Env): Promise<void> {
+    const period = new Date(controller.scheduledTime).toISOString().slice(0, 13);
+    const creators = await env.DB.prepare("SELECT id FROM creators WHERE status IN ('demo','active')").all<{ id: string }>();
+    for (const creator of creators.results || []) {
+      for (const roleKey of ['data_quality_monitor', 'cost_monitor'] as const) {
+        const submitted = await submitTask(env, {
+          creatorId: creator.id,
+          roleKey,
+          initiatorType: 'system',
+          initiatorId: 'scheduler',
+          input: { trigger: 'scheduled', scheduledPeriod: period },
+          idempotencyKey: `scheduled:${roleKey}:${creator.id}:${period}`,
+          priority: roleKey === 'data_quality_monitor' ? 4 : 6,
+        });
+        if (submitted.created) await dispatchTask(env, submitted.task.id);
+      }
+    }
+  },
   async fetch(request: Request, env: Env): Promise<Response> {
     try {
       if (!checkOrigin(request, env)) return fail("Origin not allowed", 403);

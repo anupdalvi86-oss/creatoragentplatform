@@ -906,7 +906,17 @@ export default function AdminApp() {
     await run(async () => {
       await admin(`/agent-tasks/${selectedId}/${taskId}/run`, "POST");
       await refreshAgentOperations();
-    }, "Agent task completed. Review its result below.");
+    }, "Agent task dispatched. Review its result below when it completes.");
+  }
+  async function approveAgentTask(taskId: string, decision: "approved" | "rejected") {
+    await run(async () => {
+      await admin(`/agent-tasks/${selectedId}/${taskId}/approve`, "POST", {
+        approverType: "admin",
+        approverId: "admin-ui",
+        decision,
+      });
+      await refreshAgentOperations();
+    }, decision === "approved" ? "Approval recorded; the workflow will continue." : "Task rejected.");
   }
   async function runQualityCheck() {
     await run(async () => {
@@ -1245,9 +1255,19 @@ export default function AdminApp() {
                         {task.result && <pre>{JSON.stringify(task.result, null, 2)}</pre>}
                         {(task.status === "queued" || task.status === "awaiting_review") && (
                             <button disabled={busy} onClick={() => runAgentTask(task.id)}>
-                              Run task
+                              Dispatch task
                             </button>
                           )}
+                        {task.status === "awaiting_review" && task.result && (
+                          <>
+                            <button disabled={busy} onClick={() => approveAgentTask(task.id, "approved")}>
+                              Approve and continue
+                            </button>
+                            <button disabled={busy} onClick={() => approveAgentTask(task.id, "rejected")}>
+                              Reject
+                            </button>
+                          </>
+                        )}
                       </div>
                     )) : <p>No specialist tasks submitted yet.</p>}
                   </section>

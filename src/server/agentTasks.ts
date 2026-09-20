@@ -67,6 +67,28 @@ export interface TaskSubmission {
   priority?: number;
 }
 
+export interface TaskWorkflowStep {
+  roleKey: string;
+  input?: Record<string, unknown>;
+}
+
+export interface TaskWorkflowInput {
+  workflowId?: string;
+  steps: Array<string | TaskWorkflowStep>;
+  stepIndex?: number;
+}
+
+export interface TaskHandoff {
+  id: string;
+  parentTaskId: string;
+  childTaskId: string;
+  fromRoleKey: string;
+  toRoleKey: string;
+  sequenceIndex: number;
+  payload: Record<string, unknown>;
+  status: 'created' | 'dispatched' | 'completed' | 'awaiting_review' | 'failed' | 'cancelled';
+}
+
 export interface DataQualityFinding {
   id: string;
   creatorId: string;
@@ -329,6 +351,66 @@ export async function updateTaskStatus(
   await env.DB.prepare(
     `UPDATE agent_tasks SET ${updates.join(', ')} WHERE id = ?`
   ).bind(...params).run();
+}
+
+export async function createTaskHandoff(
+  env: Env,
+  handoff: Omit<TaskHandoff, 'id'>,
+): Promise<string> {
+  const handoffId = id();
+  await env.DB.prepare(
+    `INSERT INTO agent_task_handoffs
+      (id,parent_task_id,child_task_id,from_role_key,to_role_key,sequence_index,payload_json,status)
+     VALUES(?,?,?,?,?,?,?,?)`
+  ).bind(
+    handoffId,
+    handoff.parentTaskId,
+    handoff.childTaskId,
+    handoff.fromRoleKey,
+    handoff.toRoleKey,
+    handoff.sequenceIndex,
+    JSON.stringify(handoff.payload),
+    handoff.status,
+  ).run();
+  return handoffId;
+}
+
+export async function updateTaskHandoff(
+  env: Env,
+  handoffId: string,
+  status: TaskHandoff['status'],
+): Promise<void> {
+  await env.DB.prepare(
+    `UPDATE agent_task_handoffs SET status=?,updated_at=CURRENT_TIMESTAMP WHERE id=?`
+  ).bind(status, handoffId).run();
+}
+
+export async function listTaskHandoffs(env: Env, taskId: string): Promise<TaskHandoff[]> {
+  const { results } = await env.DB.prepare(
+    `SELECT id,parent_task_id,child_task_id,from_role_key,to_role_key,sequence_index,payload_json,status
+     FROM agent_task_handoffs
+     WHERE parent_task_id=? OR child_task_id=?
+     ORDER BY sequence_index`
+  ).bind(taskId, taskId).all<{
+    id: string;
+    parent_task_id: string;
+    child_task_id: string;
+    from_role_key: string;
+    to_role_key: string;
+    sequence_index: number;
+    payload_json: string;
+    status: TaskHandoff['status'];
+  }>();
+  return (results || []).map((row) => ({
+    id: row.id,
+    parentTaskId: row.parent_task_id,
+    childTaskId: row.child_task_id,
+    fromRoleKey: row.from_role_key,
+    toRoleKey: row.to_role_key,
+    sequenceIndex: row.sequence_index,
+    payload: JSON.parse(row.payload_json),
+    status: row.status,
+  }));
 }
 
 // Task Run tracking for audit trail

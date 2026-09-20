@@ -45,3 +45,15 @@ The current runtime foundation is operational; the remaining registered roles st
 - Verified remote D1 reports 32 enabled roles, no pending migrations, and the public Worker returns HTTP 200.
 
 The role layer is now complete at the contract/handler level. Live Instagram ingestion, speech-to-text, translation-provider execution, media storage and durable queue/workflow execution remain credential/infrastructure gates rather than silently simulated capabilities.
+
+## 2026-09-21 — Durable automatic handoff
+
+- Added parent/child handoff records in migration `0006_agent_task_handoffs.sql`.
+- Added `AgentTaskWorkflow` for chained role execution, approval pauses and retries.
+- Added Queue delivery with dead-letter configuration for standalone background tasks.
+- Added hourly scheduled Data Quality Monitor and Cost Monitor tasks.
+- Added automatic task dispatch on submission, approval/resume API, and handoff inspection API.
+- Verified locally with a real root task → child task chain and persisted handoff payload.
+- Added Cloudflare queue resources `creator-agent-task-queue` and `creator-agent-task-dlq`.
+
+The intended Telegram experience is now represented by the platform runtime: Hermes can submit one root task with a workflow step list, and the Worker advances the chain until it reaches completion or requires approval.

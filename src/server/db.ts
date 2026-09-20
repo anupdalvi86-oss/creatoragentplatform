@@ -1,7 +1,11 @@
 import type { ContentItem, Creator, RecipeMeta } from '../shared/types';
 import { cleanContentTitle } from './domain';
 
-export type Env = { DB: D1Database; ASSETS: Fetcher; VECTOR?: Vectorize; APP_ENV: string; AI_PRIMARY: string; AI_FALLBACK: string; AI_MODEL_CHEAP: string; AI_MODEL_STANDARD: string; AI_MODEL_REASONING: string; AI_EMBEDDING_MODEL?: string; AI_PRICING_JSON?: string; OPENAI_API_KEY?: string; OPENAI_BASE_URL?: string; SESSION_SECRET?: string; ADMIN_DEV_TOKEN?: string; CF_ACCESS_TEAM_DOMAIN?: string; CF_ACCESS_AUD?: string; YOUTUBE_API_KEY?: string; AGENT_REACH_URL?: string; AGENT_REACH_TOKEN?: string };
+export type AgentQueueMessage = { taskId: string };
+export type AgentWorkflowBinding = {
+  create(options?: { id?: string; params?: { taskId: string } }): Promise<{ id: string }>;
+};
+export type Env = { DB: D1Database; ASSETS: Fetcher; VECTOR?: Vectorize; AGENT_TASK_QUEUE?: Queue<AgentQueueMessage>; AGENT_TASK_WORKFLOW?: AgentWorkflowBinding; APP_ENV: string; AI_PRIMARY: string; AI_FALLBACK: string; AI_MODEL_CHEAP: string; AI_MODEL_STANDARD: string; AI_MODEL_REASONING: string; AI_EMBEDDING_MODEL?: string; AI_PRICING_JSON?: string; OPENAI_API_KEY?: string; OPENAI_BASE_URL?: string; SESSION_SECRET?: string; ADMIN_DEV_TOKEN?: string; CF_ACCESS_TEAM_DOMAIN?: string; CF_ACCESS_AUD?: string; YOUTUBE_API_KEY?: string; AGENT_REACH_URL?: string; AGENT_REACH_TOKEN?: string };
 type CreatorRow = { id: string; slug: string; name: string; category: string; status: string; domain?: string | null; brand_json: string; agent_json: string; monetization_json: string };
 type ContentRow = { id: string; creator_id: string; title: string; description: string; source_url: string; thumbnail_url: string | null; tags_json: string; structured_json: string; provenance_json: string; rights_status: string; published_at: string | null };
 export const id = () => crypto.randomUUID();
