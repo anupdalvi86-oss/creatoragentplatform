@@ -32,3 +32,16 @@ The build is Wrangler's dry run. The unrelated untracked `test.tmp` file was pre
 - Verified the public Worker returns HTTP 200, `/admin` is protected with HTTP 302, and the remote migration list is clean.
 
 The current runtime foundation is operational; the remaining registered roles still need their own adapters, triggers and tests. Instagram access, media upload/storage, transcription, translation and durable queue/workflow bindings are not configured.
+
+## 2026-09-20 — All selected role handlers
+
+- Added typed handlers for all 32 selected non-excluded roles across content, consumer, engineering and operations.
+- Added migrations `0004_specialist_role_handlers.sql` and `0005_enable_specialist_handlers.sql`.
+- Enabled all 32 roles in local and remote D1; provider-dependent handlers report explicit integration-required/review states.
+- Added role submission controls for every registered role in the Admin Operations panel.
+- Added route-level smoke coverage for submit → run and fixed POST task-route matching.
+- Verified 29/29 tests, typecheck, lint and build.
+- Pushed commit `a0ac6da`, applied migrations remotely, and deployed Worker version `7efb2edc-e9d1-4bfc-9786-963c2ab92511`.
+- Verified remote D1 reports 32 enabled roles, no pending migrations, and the public Worker returns HTTP 200.
+
+The role layer is now complete at the contract/handler level. Live Instagram ingestion, speech-to-text, translation-provider execution, media storage and durable queue/workflow execution remain credential/infrastructure gates rather than silently simulated capabilities.
