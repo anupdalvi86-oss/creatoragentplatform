@@ -25,6 +25,16 @@ import { factSchema, runScout } from "./research";
 import { ingestYouTubePage } from "./youtube";
 import { InternalEntitlementProvider } from "./entitlements";
 import { getGateVariant } from "./experiments";
+import {
+  submitTask,
+  getTask,
+  listTasks,
+  updateTaskStatus,
+  listRoles,
+  runDataQualityCheck,
+  listDataQualityFindings,
+  type TaskSubmission,
+} from "./agentTasks";
 
 const reply = (data: unknown, status = 200, cookie?: string) =>
   new Response(JSON.stringify(data), {
@@ -1818,6 +1828,116 @@ async function adminRoute(
       ai: ai?.results || [],
       confirmedRevenue: revenue?.results || [],
     });
+  }
+  // Agent Task Management Routes
+  if (request.method === "GET" && path[0] === "agent-roles") {
+    const category = request.headers.get("x-category") as 'content' | 'consumer' | 'engineering' | 'operations' | undefined;
+    const roles = await listRoles(env, category, true);
+    return reply({ roles });
+  }
+  if (request.method === "POST" && path[0] === "agent-tasks" && path[1]) {
+    const creatorId = path[1];
+    const input = z
+      .object({
+        roleKey: z.string().min(1).max(80),
+        initiatorType: z.enum(['admin', 'user', 'system', 'webhook']),
+        initiatorId: z.string().min(1).max(100),
+        input: z.record(z.string(), z.unknown()).default({}),
+        idempotencyKey: z.string().min(1).max(200).optional(),
+        priority: z.number().int().min(1).max(10).default(5),
+      })
+      .parse(await body(request));
+    const submission: TaskSubmission = {
+      creatorId,
+      roleKey: input.roleKey,
+      initiatorType: input.initiatorType,
+      initiatorId: input.initiatorId,
+      input: input.input,
+      idempotencyKey: input.idempotencyKey,
+      priority: input.priority,
+    };
+    const { task, created, previousStatus } = await submitTask(env, submission);
+    return reply({ task, created, previousStatus }, created ? 201 : 200);
+  }
+  if (request.method === "GET" && path[0] === "agent-tasks" && path[1]) {
+    const creatorId = path[1];
+    const status = request.headers.get("x-status") as 'queued' | 'running' | 'awaiting_review' | 'completed' | 'failed' | 'cancelled' | undefined;
+    const roleId = request.headers.get("x-role-id") || undefined;
+    const tasks = await listTasks(env, { creatorId, status, roleId }, 50);
+    return reply({ tasks });
+  }
+  if (request.method === "GET" && path[0] === "agent-tasks" && path[1] && path[2]) {
+    const taskId = path[2]!;
+    const task = await getTask(env, taskId);
+    if (!task) return fail("Task not found", 404);
+    if (task.creatorId !== path[1]) return fail("Task does not belong to creator", 403);
+    return reply({ task });
+  }
+  if (request.method === "POST" && path[0] === "agent-tasks" && path[1] && path[2] === "run") {
+    const creatorId = path[1]!;
+    const taskId = path[3]!;
+    const task = await getTask(env, taskId);
+    if (!task) return fail("Task not found", 404);
+    if (task.creatorId !== creatorId) return fail("Task does not belong to creator", 403);
+    if (task.status !== 'queued' && task.status !== 'awaiting_review') {
+      return fail(`Task cannot be run: ${task.status}`, 409);
+    }
+    // Data Quality Monitor execution
+    if (task.roleId === 'role-dqm-001') {
+      await updateTaskStatus(env, taskId, 'running');
+      try {
+        const { findings, summary } = await runDataQualityCheck(env, creatorId, taskId);
+        await updateTaskStatus(env, taskId, 'completed', { findings, summary });
+        return reply({ taskId, status: 'completed', findings, summary });
+      } catch (error) {
+        const message = error instanceof Error ? error.message : 'Unknown error';
+        await updateTaskStatus(env, taskId, 'failed', undefined, message);
+        return reply({ taskId, status: 'failed', error: message }, 500);
+      }
+    }
+    // Content Librarian execution (preview mode)
+    if (task.roleId === 'role-lib-001') {
+      // This would be implemented with reversible operations
+      // For now, mark as awaiting_review since it requires approval
+      return reply({ taskId, status: 'awaiting_review', message: 'Content Librarian requires approval before applying changes' });
+    }
+    return fail(`Role execution not implemented: ${task.roleId}`, 501);
+  }
+  if (request.method === "POST" && path[0] === "data-quality" && path[1] === "check") {
+    const input = z
+      .object({
+        creatorId: z.string().min(1),
+        initiatorId: z.string().min(1).default('admin'),
+      })
+      .parse(await body(request));
+    // Submit and immediately run a Data Quality Monitor task
+    const { task, created } = await submitTask(env, {
+      creatorId: input.creatorId,
+      roleKey: 'data_quality_monitor',
+      initiatorType: 'admin',
+      initiatorId: input.initiatorId,
+      input: { trigger: 'manual', timestamp: new Date().toISOString() },
+      priority: 3,
+    });
+    if (task.status === 'queued') {
+      const { findings, summary } = await runDataQualityCheck(env, input.creatorId, task.id);
+      await updateTaskStatus(env, task.id, 'completed', { findings, summary });
+      return reply({ task, created, findings, summary });
+    }
+    return reply({ task, created, message: 'Task already existed' });
+  }
+  if (request.method === "GET" && path[0] === "data-quality" && path[1] === "findings") {
+    const creatorId = request.headers.get("x-creator-id");
+    if (!creatorId) return fail("x-creator-id header required", 400);
+    const severity = request.headers.get("x-severity") as 'info' | 'warning' | 'error' | undefined;
+    const findingType = request.headers.get("x-finding-type") || undefined;
+    const reviewed = request.headers.get("x-reviewed");
+    const findings = await listDataQualityFindings(env, creatorId, {
+      severity,
+      findingType,
+      reviewed: reviewed === 'true' ? true : reviewed === 'false' ? false : undefined,
+    }, 100);
+    return reply({ findings });
   }
   if (request.method === "POST" && path[0] === "revenue" && path[1]) {
     const input = z
