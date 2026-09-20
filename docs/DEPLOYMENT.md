@@ -6,7 +6,7 @@ Run `npm run db:migrate` then `npm run db:seed`. The seed inserts two demo tenan
 
 ## Production prerequisites
 
-1. Create a Cloudflare D1 database named `creator-agent-db`, replace the placeholder `database_id` in `wrangler.jsonc`, and apply `npm run db:migrate:remote`.
+1. Create a Cloudflare D1 database named `creator-agent-db`, replace the placeholder `database_id` in `wrangler.jsonc`, and apply `npm run db:migrate:remote`. For the demo creator, load the reviewed sample tenant and content with `XDG_CONFIG_HOME=.wrangler/config npx wrangler d1 execute creator-agent-db --remote --file=seed/demo.sql`; production creator data should instead be loaded through the admin workflow after rights review.
 2. Configure a Cloudflare Access application for `/admin*` and `/api/admin*`. Set `CF_ACCESS_TEAM_DOMAIN` and `CF_ACCESS_AUD` as Worker secrets and insert allowed operator email/role rows into `admin_users`. The Worker verifies the Access JWT signature, audience, issuer, expiry and admin row on every admin API call.
 3. Set a strong `SESSION_SECRET` through `wrangler secret put SESSION_SECRET`. Production requests fail closed without it. `APP_ENV` is `production` in checked-in configuration; local dev explicitly overrides it.
 4. Review creator authorization, source rights, branding, privacy notice, data retention, custom domain and legal disclosures before publishing.
