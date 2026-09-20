@@ -69,7 +69,7 @@ The cooking and Scout foundations exist, and a Cloudflare production URL is serv
 5. Free/premium gates, affiliates and revenue: [MONETIZATION.md](docs/MONETIZATION.md).
 6. D1 setup, credentials, Cloudflare Access and deployment: [DEPLOYMENT.md](docs/DEPLOYMENT.md).
 7. Known limitations and next milestones: [IMPLEMENTATION_PLAN.md](docs/IMPLEMENTATION_PLAN.md).
-8. Hermes checkout, production boundary and copyable first task: [HERMES_HANDOFF.md](docs/HERMES_HANDOFF.md).
+8. Hermes checkout, production boundary and full Telegram instruction: [HERMES_HANDOFF.md](docs/HERMES_HANDOFF.md).
 9. Selected roles, exclusions, status and phased definition of done: [AGENT_CATALOG.md](docs/AGENT_CATALOG.md).
 
 For another cooking creator, create a creator in `/admin`, add its Creator URL, then use the Scout tab to research the profile, record audience/content observations, and generate a reviewable opportunity and ProductSpec. Add approved content via an official YouTube channel or authorized metadata import. Imports start in review; an operator must inspect rights and metadata before marking them ready. Activation requires ready authorized, uploaded, or licensed content. The same Worker and PWA serve every slug. For another vertical, add a vertical-specific interface and tool definitions before enabling that category; see [architecture](docs/ARCHITECTURE.md).
