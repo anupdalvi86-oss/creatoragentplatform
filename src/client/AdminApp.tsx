@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import type { Creator } from "../shared/types";
 
 type Metrics = {
@@ -108,6 +108,13 @@ type QualityFindingRow = {
   suggestedAction: string | null;
   reviewedAt: string | null;
   createdAt: string;
+};
+type AdminRequest = <T>(path: string, method?: string, data?: unknown) => Promise<T>;
+type CreatorSetupResult = {
+  pwaUrl: string;
+  platform: string;
+  contentImport?: { processed?: number; status?: string; error?: string };
+  tasks?: Array<{ roleKey: string; status: string; error?: string }>;
 };
 const cookingTools = [
   "searchCreatorKnowledge",
@@ -593,6 +600,84 @@ function AgentEditor({
   );
 }
 
+function SimpleCreatorSetup({ admin }: { admin: AdminRequest }) {
+  const [sourceUrl, setSourceUrl] = useState("");
+  const [result, setResult] = useState<CreatorSetupResult | null>(null);
+  const [error, setError] = useState("");
+  const [busy, setBusy] = useState(false);
+
+  async function buildPwa(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setBusy(true);
+    setError("");
+    setResult(null);
+    try {
+      const normalized = normalizeCreatorUrl(sourceUrl);
+      const setup = await admin<CreatorSetupResult>("/creator-setup", "POST", { sourceUrl: normalized });
+      setResult(setup);
+    } catch (requestError) {
+      setError((requestError as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const imported = result?.contentImport?.processed || 0;
+  const failed = result?.tasks?.filter((task) => task.status === "failed").length || 0;
+
+  return (
+    <div className="simple-setup-shell">
+      <header className="simple-setup-header">
+        <span className="simple-setup-mark">✦</span>
+        <strong>Creator Agent Platform</strong>
+      </header>
+      <main className="simple-setup-main">
+        <p className="eyebrow">CREATOR PWA BUILDER</p>
+        <h1>Share a channel.<br /><i>Get the PWA.</i></h1>
+        <p className="simple-setup-intro">
+          Paste one YouTube channel link. We’ll create the creator page,
+          import the public content, and run the setup agents for you.
+        </p>
+        <form className="simple-setup-form" onSubmit={buildPwa}>
+          <label htmlFor="creator-source-url">YouTube channel link</label>
+          <div className="simple-setup-input-row">
+            <input
+              id="creator-source-url"
+              type="url"
+              inputMode="url"
+              required
+              value={sourceUrl}
+              onChange={(event) => setSourceUrl(event.target.value)}
+              placeholder="https://www.youtube.com/@creator"
+              disabled={busy}
+            />
+            <button type="submit" disabled={busy}>
+              {busy ? "Preparing…" : "Build my PWA"}
+            </button>
+          </div>
+        </form>
+        {error && <p className="simple-setup-error" role="alert">{error}</p>}
+        {result && (
+          <section className="simple-setup-result" aria-live="polite">
+            <p className="eyebrow">SETUP COMPLETE</p>
+            <h2>Your creator PWA is ready.</h2>
+            <p>
+              {imported ? `${imported} public videos imported. ` : "The PWA shell is ready. "}
+              Setup agents are running in the background; you do not need to configure anything else.
+            </p>
+            {failed > 0 && <small>{failed} agent task{failed === 1 ? "" : "s"} need attention.</small>}
+            <a className="simple-setup-open" href={result.pwaUrl}>Open the creator PWA ↗</a>
+          </section>
+        )}
+        <p className="simple-setup-note">Public metadata is imported automatically. Transcripts and derived recipe steps require creator authorization.</p>
+      </main>
+      <footer className="simple-setup-footer">
+        <a href="/admin?advanced=1">Advanced controls</a>
+      </footer>
+    </div>
+  );
+}
+
 export default function AdminApp() {
   const [token, setToken] = useState("");
   const [creators, setCreators] = useState<Creator[]>([]);
@@ -628,6 +713,7 @@ export default function AdminApp() {
   const [message, setMessage] = useState("");
   const [busy, setBusy] = useState(false);
   const selected = creators.find((creator) => creator.id === selectedId);
+  const advancedMode = new URLSearchParams(location.search).get("advanced") === "1";
 
   useEffect(() => {
     setResearchUrl(selected?.creatorUrl || "");
@@ -684,10 +770,11 @@ export default function AdminApp() {
     }
   }
   useEffect(() => {
+    if (!advancedMode) return;
     loadCreators();
-  }, [token]);
+  }, [token, advancedMode]);
   useEffect(() => {
-    if (!selectedId) return;
+    if (!advancedMode || !selectedId) return;
     Promise.all([
       admin<Metrics>(`/metrics/${selectedId}`),
       admin<Gate[]>(`/gates/${selectedId}`),
@@ -717,7 +804,7 @@ export default function AdminApp() {
         setQualityFindings(findings.findings);
       })
       .catch((error: Error) => setMessage(error.message));
-  }, [selectedId, token]);
+  }, [selectedId, token, advancedMode]);
   async function run(action: () => Promise<unknown>, success: string) {
     setBusy(true);
     setMessage("");
@@ -769,6 +856,7 @@ export default function AdminApp() {
       setMessage(`PWA ready at ${setupResult.pwaUrl}. ${imported} public content items imported; ${setupResult.tasks?.length || 0} setup agents started${failedTasks ? `, ${failedTasks} need attention` : ""}.${connectorNote}`);
     }
   }
+  if (!advancedMode) return <SimpleCreatorSetup admin={admin} />;
   async function createExperiment() {
     await run(async () => {
       const field =

@@ -443,3 +443,154 @@ body { font-family: 'Montserrat', system-ui, sans-serif; color: var(--brand-ink)
     margin-top: 22px;
   }
 }
+
+.simple-setup-shell {
+  min-height: 100vh;
+  background: #f5f2ec;
+  color: #2f3030;
+}
+
+.simple-setup-header {
+  height: 70px;
+  padding: 0 30px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: #253b36;
+  color: #fff;
+}
+
+.simple-setup-mark {
+  color: #e1b05b;
+  font-size: 22px;
+}
+
+.simple-setup-main {
+  max-width: 760px;
+  margin: 0 auto;
+  padding: clamp(70px, 12vh, 150px) 24px 40px;
+}
+
+.simple-setup-main h1 {
+  margin: 0 0 24px;
+  font-family: "Playfair Display", Georgia, serif;
+  font-size: clamp(48px, 8vw, 82px);
+  font-weight: 500;
+  line-height: 1.02;
+  letter-spacing: -0.04em;
+}
+
+.simple-setup-main h1 i {
+  color: #944529;
+  font-style: normal;
+}
+
+.simple-setup-intro {
+  max-width: 560px;
+  margin: 0 0 34px;
+  color: #637066;
+  font-size: 18px;
+  line-height: 1.6;
+}
+
+.simple-setup-form {
+  padding: 22px;
+  border: 1px solid #e4e5de;
+  border-radius: 16px;
+  background: #fff;
+  box-shadow: 0 12px 28px #283e3510;
+}
+
+.simple-setup-form label {
+  display: block;
+  margin-bottom: 8px;
+  color: #59665e;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.simple-setup-input-row {
+  display: flex;
+  gap: 10px;
+}
+
+.simple-setup-input-row input {
+  min-width: 0;
+  flex: 1;
+  padding: 14px;
+  border: 1px solid #dcded8;
+  border-radius: 9px;
+  font-size: 16px;
+}
+
+.simple-setup-input-row button {
+  padding: 0 20px;
+  border: 0;
+  border-radius: 9px;
+  background: #416657;
+  color: #fff;
+  font-weight: 700;
+}
+
+.simple-setup-result {
+  margin-top: 18px;
+  padding: 22px;
+  border: 1px solid #c5decf;
+  border-radius: 16px;
+  background: #e4efe7;
+  color: #315d44;
+}
+
+.simple-setup-result h2 {
+  margin: 0 0 8px;
+  font-family: "Playfair Display", Georgia, serif;
+  font-size: 30px;
+  font-weight: 500;
+}
+
+.simple-setup-result p:not(.eyebrow) {
+  color: #52645a;
+  line-height: 1.6;
+}
+
+.simple-setup-result small {
+  display: block;
+  color: #8a5a3d;
+}
+
+.simple-setup-open {
+  display: inline-block;
+  margin-top: 12px;
+  color: #315d44;
+  font-weight: 700;
+}
+
+.simple-setup-error {
+  margin-top: 16px;
+  padding: 12px 14px;
+  border: 1px solid #edc3b8;
+  border-radius: 9px;
+  background: #fff0eb;
+  color: #9b3e2d;
+}
+
+.simple-setup-note {
+  margin-top: 24px;
+  color: #8b938c;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.simple-setup-footer {
+  max-width: 760px;
+  margin: 0 auto;
+  padding: 0 24px 32px;
+  font-size: 12px;
+}
+
+@media (max-width: 640px) {
+  .simple-setup-header { padding: 0 18px; }
+  .simple-setup-input-row { display: grid; }
+  .simple-setup-input-row button { min-height: 48px; }
+  .simple-setup-intro { font-size: 16px; }
+}

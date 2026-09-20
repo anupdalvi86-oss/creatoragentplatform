@@ -70,3 +70,8 @@ The intended Telegram experience is now represented by the platform runtime: Her
 - Added `POST /api/admin/creator-setup` and changed the Admin UI to a single **Build PWA** link input.
 - The endpoint creates or reuses the tenant, returns the PWA path, imports supported public metadata, and starts applicable creator-facing content/operations jobs with idempotent task keys.
 - YouTube uses the public metadata path; Instagram and unsupported platforms return explicit connector/authorization requirements. Engineering, commercial and excluded roles remain outside consumer onboarding.
+
+## 2026-09-21 — Simplified default creator setup
+
+- The default `/admin` experience now presents only one YouTube link field and one **Build my PWA** action.
+- Setup completion links directly to the generated creator PWA; the internal control room remains available at `/admin?advanced=1`.
