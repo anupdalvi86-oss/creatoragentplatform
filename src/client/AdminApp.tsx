@@ -618,10 +618,7 @@ export default function AdminApp() {
   const [campaignBrand, setCampaignBrand] = useState("");
   const [campaignPlacement, setCampaignPlacement] = useState("");
   const [scout, setScout] = useState<ScoutResult | null>(null);
-  const [newSlug, setNewSlug] = useState("");
-  const [newName, setNewName] = useState("");
   const [newCreatorUrl, setNewCreatorUrl] = useState("");
-  const newCategory = "cooking";
   const [researchUrl, setResearchUrl] = useState("");
   const [audienceNotes, setAudienceNotes] = useState("");
   const [contentNotes, setContentNotes] = useState("");
@@ -634,6 +631,7 @@ export default function AdminApp() {
 
   useEffect(() => {
     setResearchUrl(selected?.creatorUrl || "");
+    setChannelId(selected?.creatorUrl || "");
     setAudienceNotes("");
     setContentNotes("");
     setScout(null);
@@ -733,34 +731,43 @@ export default function AdminApp() {
     }
   }
   async function createCreator() {
+    let setupResult: {
+      id?: string;
+      slug?: string;
+      platform?: string;
+      pwaUrl?: string;
+      contentImport?: { status?: string; processed?: number; error?: string };
+      tasks?: Array<{ roleKey: string; status: string; error?: string }>;
+    } = {};
     await run(async () => {
       const creatorUrl = normalizeCreatorUrl(newCreatorUrl);
-      const created = await admin<{ id: string }>("/creators", "POST", {
-        slug: newSlug,
-        name: newName,
-        creatorUrl,
-        category: newCategory,
-        brand: {
-          accent: "#b85c3b",
-          hero: "What can we make today?",
-          disclaimer: "Platform workspace. Replace with creator-approved branding before launch.",
-        },
-        enabledTools: [
-          "searchCreatorKnowledge",
-          "findSubstitution",
-          "calculateServings",
-          "createMealPlan",
-          "createShoppingList",
-        ],
-      });
+      const created = await admin<{
+        id: string;
+        slug: string;
+        platform: string;
+        pwaUrl: string;
+        contentImport?: { status?: string; processed?: number; error?: string };
+        tasks?: Array<{ roleKey: string; status: string; error?: string }>;
+      }>("/creator-setup", "POST", { sourceUrl: creatorUrl });
+      setupResult = created;
+      const importResult = created.contentImport || {};
       await loadCreators();
       setSelectedId(created.id);
       setResearchUrl(creatorUrl || "");
-      setTab("scout");
-      setNewSlug("");
-      setNewName("");
+      setChannelId(creatorUrl || "");
+      setTab(importResult.processed ? "content" : "operations");
       setNewCreatorUrl("");
-    }, "Creator created. Add approved content and review configuration before launch.");
+    }, "Creator PWA setup started.");
+    if (setupResult.pwaUrl) {
+      const imported = setupResult.contentImport?.processed || 0;
+      const failedTasks = setupResult.tasks?.filter((task) => task.status === "failed").length || 0;
+      const connectorNote = setupResult.platform === "instagram"
+        ? " Instagram requires an authorized Professional account before content can be imported."
+        : setupResult.platform === "other"
+          ? " This source needs a supported connector or authorized upload before content can be added."
+          : "";
+      setMessage(`PWA ready at ${setupResult.pwaUrl}. ${imported} public content items imported; ${setupResult.tasks?.length || 0} setup agents started${failedTasks ? `, ${failedTasks} need attention` : ""}.${connectorNote}`);
+    }
   }
   async function createExperiment() {
     await run(async () => {
@@ -968,29 +975,20 @@ export default function AdminApp() {
             ))}
           </div>
           <div className="admin-create">
-            <h3>New cooking creator</h3>
-            <input
-              placeholder="slug"
-              value={newSlug}
-              onChange={(e) => setNewSlug(e.target.value)}
-            />
-            <input
-              placeholder="Display name"
-              value={newName}
-              onChange={(e) => setNewName(e.target.value)}
-            />
+            <h3>Build creator PWA</h3>
             <input
               type="text"
               inputMode="url"
-              placeholder="Creator URL (optional)"
+              placeholder="YouTube / Instagram channel link"
               value={newCreatorUrl}
               onChange={(e) => setNewCreatorUrl(e.target.value)}
             />
             <small>
-              Add the public profile or channel URL to start the research flow.
+              One link creates the creator, starts the applicable agents, and
+              prepares the public PWA.
             </small>
             <button disabled={busy} onClick={createCreator}>
-              Create
+              Build PWA
             </button>
           </div>
         </aside>
@@ -1046,21 +1044,19 @@ export default function AdminApp() {
                 <div className="admin-panels">
                   {content.length === 0 && (
                     <section className="admin-next-action">
-                      <p className="eyebrow">SETUP CHECKLIST</p>
-                      <h2>Your creator page is not ready for visitors yet</h2>
+                      <p className="eyebrow">PWA SETUP</p>
+                      <h2>{agentTasks.length ? "Your creator PWA is being prepared" : "Your creator PWA is waiting for a source"}</h2>
                       <p>
-                        Research the creator first, then add approved source
-                        metadata. That content powers the public creator page.
+                        {agentTasks.length
+                          ? "The applicable creator agents are running. Review their status in Operations; source connectors may still require authorization."
+                          : "Paste a YouTube, Instagram, or other creator channel link to start the setup pipeline."}
                       </p>
                       <div className="admin-editor-actions">
-                        <button onClick={() => setTab("scout")}>
-                          1. Research creator
-                        </button>
-                        <button onClick={() => setTab("content")}>
-                          2. Add approved content
+                        <button onClick={() => setTab(agentTasks.length ? "operations" : "content")}>
+                          {agentTasks.length ? "View setup agents" : "Add source content"}
                         </button>
                         <a href={`/creator/${selected.slug}`}>
-                          Preview creator page ↗
+                          Open creator PWA ↗
                         </a>
                       </div>
                     </section>

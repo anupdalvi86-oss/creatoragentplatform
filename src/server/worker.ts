@@ -23,7 +23,7 @@ import {
   validateRedirect,
 } from "./domain";
 import { factSchema, runScout } from "./research";
-import { ingestYouTubePage } from "./youtube";
+import { ingestYouTubePage, isYouTubeChannelRef } from "./youtube";
 import { InternalEntitlementProvider } from "./entitlements";
 import { getGateVariant } from "./experiments";
 import {
@@ -974,6 +974,143 @@ async function affiliateRoute(
   return Response.redirect(url.toString(), 302);
 }
 
+type CreatorProvisionInput = {
+  slug: string;
+  name: string;
+  creatorUrl?: string;
+  category: "cooking";
+  brand: { accent: string; hero: string; disclaimer: string };
+  enabledTools: string[];
+};
+
+function sourcePlatform(sourceUrl: string): "youtube" | "instagram" | "other" {
+  const hostname = new URL(sourceUrl).hostname.replace(/^www\./, "");
+  if (hostname === "youtube.com" || hostname === "m.youtube.com") return "youtube";
+  if (hostname === "instagram.com") return "instagram";
+  return "other";
+}
+
+function sourceIdentity(sourceUrl: string): { slug: string; name: string } {
+  const parsed = new URL(sourceUrl);
+  const candidate = parsed.pathname.split("/").filter(Boolean)[0]?.replace(/^@/, "") || parsed.hostname.split(".")[0] || "creator";
+  const readable = candidate.replace(/[-_.]+/g, " ").replace(/\s+/g, " ").trim();
+  const slug = readable.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 56) || "creator";
+  const name = readable.replace(/\b\w/g, (letter) => letter.toUpperCase()).slice(0, 120) || "Creator";
+  return { slug: slug.length >= 3 ? slug : `${slug}-creator`, name };
+}
+
+async function uniqueCreatorSlug(env: Env, seed: string): Promise<string> {
+  const base = seed.slice(0, 56);
+  const rows = await env.DB.prepare("SELECT slug FROM creators WHERE slug LIKE ? ORDER BY slug").bind(`${base}%`).all<{ slug: string }>();
+  const used = new Set((rows.results || []).map((row) => row.slug));
+  if (!used.has(base)) return base;
+  for (let suffix = 2; suffix < 1000; suffix += 1) {
+    const candidate = `${base.slice(0, 60 - String(suffix).length - 1)}-${suffix}`;
+    if (!used.has(candidate)) return candidate;
+  }
+  return `${base.slice(0, 50)}-${Date.now().toString(36).slice(-8)}`;
+}
+
+async function provisionCreator(env: Env, input: CreatorProvisionInput) {
+  const creatorId = id();
+  const agentId = id();
+  await env.DB.batch([
+    env.DB.prepare(
+      "INSERT INTO creators(id,slug,name,category,status,domain,brand_json,agent_json,model_policy_json,monetization_json) VALUES(?,?,?,?,?,?,?,?,?,?)",
+    ).bind(
+      creatorId,
+      input.slug,
+      input.name,
+      input.category,
+      "demo",
+      input.creatorUrl || null,
+      JSON.stringify(input.brand),
+      JSON.stringify({
+        id: agentId,
+        role: input.category,
+        enabledTools: input.enabledTools,
+        instructions: "Ground responses in tenant content and label general suggestions.",
+        promptVersion: "cooking-v1",
+        modelPolicy: "STANDARD",
+        maxTokens: 220,
+        maxCostUsd: 0.05,
+      }),
+      JSON.stringify({ default: "STANDARD", maxCostUsd: 0.05 }),
+      JSON.stringify({ subscriptionEnabled: false, adsEnabled: false, affiliateEnabled: false }),
+    ),
+    env.DB.prepare(
+      "INSERT INTO agents(id,creator_id,role,instructions,prompt_version,model_policy,memory_policy,safety_policy) VALUES(?,?,?,?,?,?,?,?)",
+    ).bind(
+      agentId,
+      creatorId,
+      "cooking",
+      "Ground responses in tenant content and label general suggestions.",
+      "cooking-v1",
+      "STANDARD",
+      "adult-preferences-only",
+      "no-medical-or-allergy-assurances",
+    ),
+    env.DB.prepare("INSERT INTO feature_gates(creator_id,feature,required_entitlement,free_usage_limit,reset_period,trial_usage,enabled) VALUES(?,?,?,?,?,?,1)").bind(creatorId, "AI_TEXT", "premium", 5, "day", 0),
+    env.DB.prepare("INSERT INTO feature_gates(creator_id,feature,required_entitlement,free_usage_limit,reset_period,trial_usage,enabled) VALUES(?,?,?,?,?,?,1)").bind(creatorId, "AI_VOICE", "premium", null, "lifetime", 2),
+    env.DB.prepare("INSERT INTO feature_gates(creator_id,feature,required_entitlement,free_usage_limit,reset_period,trial_usage,enabled) VALUES(?,?,?,?,?,?,1)").bind(creatorId, "SHOPPING_LIST", "premium", 0, "lifetime", 0),
+    env.DB.prepare("INSERT INTO feature_gates(creator_id,feature,required_entitlement,free_usage_limit,reset_period,trial_usage,enabled) VALUES(?,?,?,?,?,?,1)").bind(creatorId, "MEAL_PLAN", "premium", 2, "lifetime", 0),
+    env.DB.prepare("INSERT INTO feature_gates(creator_id,feature,required_entitlement,free_usage_limit,reset_period,trial_usage,enabled) VALUES(?,?,?,?,?,?,1)").bind(creatorId, "SAVE_CONTENT", "premium", 5, "lifetime", 0),
+    env.DB.prepare("INSERT INTO plans(id,creator_id,code,label,price_json) VALUES(?,?,?,?,?)").bind(id(), creatorId, "free", "Free", "{}"),
+    env.DB.prepare("INSERT INTO plans(id,creator_id,code,label,price_json) VALUES(?,?,?,?,?)").bind(id(), creatorId, "premium", "Premium", "{}"),
+    env.DB.prepare("INSERT INTO entitlements(id,creator_id,code,description) VALUES(?,?,?,?)").bind(id(), creatorId, "premium", "Premium cooking features"),
+    ...input.enabledTools.map((tool) => env.DB.prepare("INSERT INTO agent_tools(creator_id,agent_id,tool_name) VALUES(?,?,?)").bind(creatorId, agentId, tool)),
+  ]);
+  return { id: creatorId, slug: input.slug, name: input.name };
+}
+
+async function importCreatorMetadata(env: Env, creatorId: string, creatorUrl?: string): Promise<Record<string, unknown>> {
+  if (!creatorUrl) return { status: "skipped", reason: "no_creator_url" };
+  if (!isYouTubeChannelRef(creatorUrl)) return { status: "skipped", reason: "not_a_youtube_channel_url" };
+  try {
+    return await ingestYouTubePage(env, creatorId, creatorUrl) as unknown as Record<string, unknown>;
+  } catch (error) {
+    const result = { status: "failed", error: error instanceof Error ? error.message.slice(0, 250) : "YouTube metadata import failed" };
+    console.warn(JSON.stringify({ event: "creator_youtube_import_failed", creatorId, message: result.error }));
+    return result;
+  }
+}
+
+async function runCreatorSetupAgents(env: Env, creatorId: string, creatorUrl: string, platform: "youtube" | "instagram" | "other") {
+  const rows = await env.DB.prepare("SELECT id FROM content_items WHERE creator_id=? AND processing_status='ready' ORDER BY created_at DESC LIMIT 25").bind(creatorId).all<{ id: string }>();
+  const contentIds = (rows.results || []).map((row) => row.id);
+  const jobs: Array<{ roleKey: string; input: Record<string, unknown> }> = [
+    { roleKey: "creator_scout", input: { url: creatorUrl, category: "cooking" } },
+    { roleKey: "rights_reviewer", input: {} },
+    { roleKey: "content_librarian", input: {} },
+    { roleKey: "data_quality_monitor", input: {} },
+    { roleKey: "model_router", input: { policy: "STANDARD" } },
+    { roleKey: "cost_monitor", input: {} },
+  ];
+  if (platform === "youtube") jobs.splice(1, 0, { roleKey: "youtube_ingestion", input: { channelUrl: creatorUrl } });
+  if (platform === "instagram") jobs.splice(1, 0, { roleKey: "instagram_ingestion", input: {} });
+  if (contentIds.length) jobs.push({ roleKey: "source_verifier", input: { sourceContentIds: contentIds } });
+  const tasks: Array<{ roleKey: string; taskId?: string; status: string; error?: string }> = [];
+  for (const job of jobs) {
+    try {
+      const submitted = await submitTask(env, {
+        creatorId,
+        roleKey: job.roleKey,
+        initiatorType: "system",
+        initiatorId: "creator-onboarding",
+        input: { ...job.input, trigger: "creator-onboarding", sourceUrl: creatorUrl },
+        idempotencyKey: `creator-onboarding:${creatorId}:${job.roleKey}`,
+        priority: 3,
+      });
+      if (submitted.created) await dispatchTask(env, submitted.task.id);
+      const current = await getTask(env, submitted.task.id);
+      tasks.push({ roleKey: job.roleKey, taskId: submitted.task.id, status: current?.status || submitted.task.status });
+    } catch (error) {
+      tasks.push({ roleKey: job.roleKey, status: "failed", error: error instanceof Error ? error.message : "Agent could not be started" });
+    }
+  }
+  return tasks;
+}
+
 async function adminRoute(
   request: Request,
   env: Env,
@@ -1289,6 +1426,39 @@ async function adminRoute(
       })),
     );
   }
+  if (request.method === "POST" && path[0] === "creator-setup") {
+    const input = z.object({
+      sourceUrl: z.string().url().refine((value) => value.startsWith("https://"), "Use an HTTPS creator channel or profile URL"),
+      displayName: z.string().min(2).max(120).optional(),
+    }).parse(await body(request));
+    const sourceUrl = new URL(input.sourceUrl).toString();
+    const platform = sourcePlatform(sourceUrl);
+    if (platform === "youtube" && !isYouTubeChannelRef(sourceUrl)) return fail("Use a YouTube channel URL, such as https://www.youtube.com/@creator", 422);
+    const existing = await env.DB.prepare("SELECT id,slug,name FROM creators WHERE domain=?").bind(sourceUrl).first<{ id: string; slug: string; name: string }>();
+    const identity = sourceIdentity(sourceUrl);
+    const creator = existing || await provisionCreator(env, {
+      slug: await uniqueCreatorSlug(env, identity.slug),
+      name: input.displayName || identity.name,
+      creatorUrl: sourceUrl,
+      category: "cooking",
+      brand: {
+        accent: "#b85c3b",
+        hero: "What can we make today?",
+        disclaimer: "Creator content is shown with source and rights status.",
+      },
+      enabledTools: ["searchCreatorKnowledge", "findSubstitution", "calculateServings", "createMealPlan", "createShoppingList"],
+    });
+    const contentImport = await importCreatorMetadata(env, creator.id, sourceUrl);
+    const tasks = await runCreatorSetupAgents(env, creator.id, sourceUrl, platform);
+    return reply({
+      ...creator,
+      platform,
+      existing: Boolean(existing),
+      contentImport,
+      tasks,
+      pwaUrl: `/creator/${creator.slug}`,
+    }, existing ? 200 : 201);
+  }
   if (request.method === "POST" && path[0] === "creators") {
     const input = z
       .object({
@@ -1387,7 +1557,8 @@ async function adminRoute(
         ).bind(creatorId, agentId, tool),
       ),
     ]);
-    return reply({ id: creatorId, slug: input.slug }, 201);
+    const contentImport = await importCreatorMetadata(env, creatorId, input.creatorUrl);
+    return reply({ id: creatorId, slug: input.slug, contentImport }, 201);
   }
   if (request.method === "PATCH" && path[0] === "creators" && path[1]) {
     const input = z

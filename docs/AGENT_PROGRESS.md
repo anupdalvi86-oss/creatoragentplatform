@@ -57,3 +57,16 @@ The role layer is now complete at the contract/handler level. Live Instagram ing
 - Added Cloudflare queue resources `creator-agent-task-queue` and `creator-agent-task-dlq`.
 
 The intended Telegram experience is now represented by the platform runtime: Hermes can submit one root task with a workflow step list, and the Worker advances the chain until it reaches completion or requires approval.
+
+## 2026-09-21 — YouTube creator onboarding import
+
+- Fixed creator creation so a YouTube channel URL automatically invokes the existing public-metadata importer instead of leaving the new PWA empty until a separate admin click.
+- Kept transcripts, media downloads and derived recipe steps behind creator authorization and review; public RSS/API results remain labelled `public_metadata`.
+- Added public RSS parsing coverage, channel-reference validation, and fallback from official API errors to the safe public feed path.
+- The admin response now reports import status/count/failure and pre-fills the retry field for the Content tab.
+
+## 2026-09-21 — One-link creator PWA setup
+
+- Added `POST /api/admin/creator-setup` and changed the Admin UI to a single **Build PWA** link input.
+- The endpoint creates or reuses the tenant, returns the PWA path, imports supported public metadata, and starts applicable creator-facing content/operations jobs with idempotent task keys.
+- YouTube uses the public metadata path; Instagram and unsupported platforms return explicit connector/authorization requirements. Engineering, commercial and excluded roles remain outside consumer onboarding.

@@ -20,7 +20,7 @@ export function durationMinutes(iso: string): number {
   return Math.ceil(Number(match[1] || 0) * 60 + Number(match[2] || 0) + Number(match[3] || 0) / 60);
 }
 function decodeXml(value: string): string {
-  return value.replace(/<!\[CDATA\[|\]\]>/g, '').replace(/&amp;/g, '&').replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/&lt;/g, '<').replace(/&gt;/g, '>');
+  return value.replace(/<!\[CDATA\[|\]\]>/g, '').replace(/&amp;/g, '&').replace(/&quot;/g, '"').replace(/&#39;|&apos;/g, "'").replace(/&lt;/g, '<').replace(/&gt;/g, '>');
 }
 function channelUrlFromRef(ref: string): string {
   if (/^UC[a-zA-Z0-9_-]{20,}$/.test(ref)) return `https://www.youtube.com/channel/${ref}`;
@@ -42,7 +42,17 @@ async function resolveChannelId(channelRef: string): Promise<{ channelId: string
 export async function resolveYouTubeChannelId(channelRef: string): Promise<{ channelId: string; channelUrl: string }> {
   return resolveChannelId(channelRef);
 }
-type PublicVideo = { id: string; title: string; description: string; publishedAt: string | null; thumbnailUrl: string | null };
+export function isYouTubeChannelRef(ref: string): boolean {
+  if (/^UC[a-zA-Z0-9_-]{20,}$/.test(ref.trim())) return true;
+  try {
+    const parsed = new URL(ref);
+    if (parsed.protocol !== 'https:' || !['www.youtube.com', 'youtube.com', 'm.youtube.com'].includes(parsed.hostname)) return false;
+    return /^\/(?:@[^/]+|channel\/UC|c\/|user\/)/i.test(parsed.pathname);
+  } catch {
+    return false;
+  }
+}
+export type PublicVideo = { id: string; title: string; description: string; publishedAt: string | null; thumbnailUrl: string | null };
 const ingredientWords = ['pasta', 'tomato', 'tomatoes', 'onion', 'garlic', 'paneer', 'cashew', 'cashews', 'cream', 'cheese', 'potato', 'rice', 'flour', 'atta', 'suji', 'rava', 'semolina', 'ghee', 'sugar', 'dahi', 'curd', 'yogurt', 'honey', 'milk', 'baking powder', 'baking soda', 'dates', 'lentils', 'chickpeas', 'oil', 'butter', 'spices', 'salt', 'pepper', 'cocoa', 'cocoa powder', 'coffee', 'coffee powder', 'cardamom', 'elaichi', 'ealichi', 'saffron', 'kesar', 'chocolate', 'chocolates'];
 const ingredientAliases: Record<string, string> = { tomatoes: 'tomato', cashews: 'cashew', 'garlic cloves': 'garlic', 'powdered sugar': 'sugar', 'desi khaand': 'sugar', khaand: 'sugar', atta: 'wheat flour', suji: 'semolina', rava: 'semolina', dahi: 'yogurt', curd: 'yogurt', elaichi: 'cardamom', ealichi: 'cardamom', kesar: 'saffron', chocolates: 'chocolate' };
 const unitAliases: Record<string, string> = { cups: 'cup', teaspoons: 'tsp', teaspoon: 'tsp', tablespoons: 'tbsp', tablespoon: 'tbsp', grams: 'g', gram: 'g', gm: 'g', kilograms: 'kg', kilogram: 'kg', milliliters: 'ml', millilitres: 'ml', milliliter: 'ml', millilitre: 'ml', pieces: 'piece', pods: 'pod', cloves: 'clove', strands: 'strand' };
@@ -118,10 +128,7 @@ function metadataFor(title: string, description: string, tags: string[], minutes
     .slice(0, 20);
   return { minutes, equipment: [], diet: [], servings: 1, ingredients: parsed.ingredients, ingredientHints: hints, extractionStatus: 'metadata_only' };
 }
-async function publicVideos(channelId: string): Promise<PublicVideo[]> {
-  const response = await fetch(`https://www.youtube.com/feeds/videos.xml?channel_id=${encodeURIComponent(channelId)}`, { signal: AbortSignal.timeout(8000) });
-  if (!response.ok) throw new Error(`YouTube public feed status ${response.status}`);
-  const xml = await response.text();
+export function parsePublicFeed(xml: string): PublicVideo[] {
   return [...xml.matchAll(/<entry>([\s\S]*?)<\/entry>/g)].slice(0, 25).flatMap((entry) => {
     const value = entry[1] || '';
     const id = value.match(/<yt:videoId>([^<]+)<\/yt:videoId>/)?.[1];
@@ -130,11 +137,16 @@ async function publicVideos(channelId: string): Promise<PublicVideo[]> {
     return [{
       id: decodeXml(id),
       title: decodeXml(title).trim(),
-      description: decodeXml(value.match(/<media:description>([\s\S]*?)<\/media:description>/)?.[1] || '').trim().slice(0, 5000),
+      description: decodeXml(value.match(/<media:description(?:\s[^>]*)?>([\s\S]*?)<\/media:description>/)?.[1] || '').trim().slice(0, 5000),
       publishedAt: value.match(/<published>([^<]+)<\/published>/)?.[1] || null,
-      thumbnailUrl: value.match(/<media:thumbnail[^>]+url=["']([^"']+)["']/)?.[1] || null,
+      thumbnailUrl: decodeXml(value.match(/<media:thumbnail[^>]+url=["']([^"']+)["']/)?.[1] || '') || null,
     }];
   });
+}
+async function publicVideos(channelId: string): Promise<PublicVideo[]> {
+  const response = await fetch(`https://www.youtube.com/feeds/videos.xml?channel_id=${encodeURIComponent(channelId)}`, { signal: AbortSignal.timeout(8000) });
+  if (!response.ok) throw new Error(`YouTube public feed status ${response.status}`);
+  return parsePublicFeed(await response.text());
 }
 async function persistPublicVideos(env: Env, creatorId: string, channelId: string, channelUrl: string, videos: PublicVideo[]) {
   const sourceId = `youtube-public-${creatorId}-${channelId}`;
@@ -179,6 +191,13 @@ export async function ingestYouTubePage(env: Env, creatorId: string, channelRef:
     await env.DB.prepare("UPDATE content_sources SET cursor=?,ingestion_status=?,last_error=NULL,updated_at=CURRENT_TIMESTAMP WHERE id=? AND creator_id=?").bind(page.nextPageToken || null, page.nextPageToken ? 'partial' : 'complete', sourceId, creatorId).run();
     return { sourceId, processed: videos.items?.length || 0, nextPageAvailable: !!page.nextPageToken, status: page.nextPageToken ? 'partial' : 'complete' };
   } catch (error) {
+    // An invalid, expired, or quota-exhausted API key should not prevent the
+    // safe public-metadata path from populating the creator page.
+    try {
+      return await persistPublicVideos(env, creatorId, channelId, resolved.channelUrl, await publicVideos(channelId));
+    } catch {
+      // Preserve the official API error as the observable failure reason.
+    }
     await env.DB.prepare("UPDATE content_sources SET ingestion_status='failed',last_error=?,updated_at=CURRENT_TIMESTAMP WHERE id=? AND creator_id=?").bind(error instanceof Error ? error.message.slice(0, 250) : 'unknown', sourceId, creatorId).run();
     throw error;
   }

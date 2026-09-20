@@ -4,7 +4,7 @@ import { canMake } from '../src/server/agent';
 import { generateAI } from '../src/server/ai';
 import type { Env } from '../src/server/db';
 import { discoverOpportunity, ManualImportProvider } from '../src/server/research';
-import { durationMinutes } from '../src/server/youtube';
+import { durationMinutes, isYouTubeChannelRef, parsePublicFeed } from '../src/server/youtube';
 import { getGateVariant } from '../src/server/experiments';
 
 test('substitution makes no creator claim without source evidence', async () => {
@@ -53,6 +53,29 @@ test('YouTube duration metadata converts without downloading media', () => {
   assert.equal(durationMinutes('PT1H2M31S'), 63);
   assert.equal(durationMinutes('PT42S'), 1);
   assert.equal(durationMinutes('bad'), 0);
+});
+test('public YouTube RSS metadata is parseable without transcripts', () => {
+  const videos = parsePublicFeed(`
+    <feed>
+      <entry>
+        <yt:videoId>abc123</yt:videoId>
+        <title><![CDATA[Paneer Dinner]]></title>
+        <published>2026-09-20T12:00:00Z</published>
+        <media:group>
+          <media:description type="html"><![CDATA[Ingredients:\n- paneer - 200 g]]></media:description>
+          <media:thumbnail url="https://i.ytimg.com/vi/abc123/hqdefault.jpg&amp;x=1" />
+        </media:group>
+      </entry>
+    </feed>`);
+  assert.equal(videos.length, 1);
+  assert.equal(videos[0]?.id, 'abc123');
+  assert.match(videos[0]?.description || '', /Ingredients/);
+  assert.equal(videos[0]?.thumbnailUrl, 'https://i.ytimg.com/vi/abc123/hqdefault.jpg&x=1');
+});
+test('creator onboarding recognizes channel URLs but not individual videos', () => {
+  assert.equal(isYouTubeChannelRef('https://www.youtube.com/@mrsyumtum'), true);
+  assert.equal(isYouTubeChannelRef('https://www.youtube.com/channel/UC1234567890123456789012'), true);
+  assert.equal(isYouTubeChannelRef('https://www.youtube.com/watch?v=abc123'), false);
 });
 test('experiment assignment is persisted for the same tenant and user', async () => {
   let assigned: string | null = null;
