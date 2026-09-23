@@ -676,3 +676,10 @@ body { font-family: 'Montserrat', system-ui, sans-serif; color: var(--brand-ink)
 .nutrition-calculator summary { color: var(--accent-dark); cursor: pointer; font-size: 16px; font-weight: 800; }
 .nutrition-calculator[open] summary { margin-bottom: 20px; }
 @media (max-width: 850px) { .pantry-layout { grid-template-columns: 1fr; } .pantry-panel { position: static; } }
+
+/* Keep long creator brands inside the copy column beside the hero image. */
+.hero { grid-template-columns: minmax(0, 1.05fr) minmax(0, .95fr); }
+.hero-copy { min-width: 0; }
+.hero h1 { max-width: 100%; overflow-wrap: anywhere; }
+.hero h1.hero-title-long { font-size: clamp(40px, 4vw, 58px); line-height: 1.08; }
+@media (max-width: 800px) { .hero h1.hero-title-long { font-size: clamp(37px, 9vw, 48px); } }

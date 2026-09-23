@@ -1364,7 +1364,9 @@ export default function App() {
           <section className="hero">
             <div className="hero-copy">
               <p className="eyebrow">{creatorDisplayName(creator?.name || "Your cooking workspace")}</p>
-              <h1>{creatorKitchenHero(creator?.name || "Kitchen Companion")}</h1>
+              <h1 className={creatorDisplayName(creator?.name || "Kitchen Companion").split(/\s+/).some((word) => word.length > 14) ? "hero-title-long" : undefined}>
+                {creatorKitchenHero(creator?.name || "Kitchen Companion")}
+              </h1>
               <p>
                 Simple recipes, everyday ideas, and a little help deciding what
                 to cook.
@@ -1590,7 +1592,12 @@ export default function App() {
                   ? (language === "hi" ? `आपके ${pantryIngredients.length} चुने हुए सामग्री से सबसे अच्छे मेल पहले दिखाए गए हैं।` : `Closest matches for your ${pantryIngredients.length} selected ingredient${pantryIngredients.length === 1 ? "" : "s"} appear first.`)
                   : (language === "hi" ? "रेसिपी मिलान देखने के लिए बाईं ओर सामग्री चुनें।" : "Select ingredients on the left to rank recipes by how well they match.")}
               </p>
-              {pantryMatches.length ? (
+              {!pantryIngredients.length ? (
+                <div className="creator-empty" role="status">
+                  <strong>{language === "hi" ? "अपनी सामग्री चुनें" : "Choose ingredients to get started"}</strong>
+                  <p>{language === "hi" ? "बाईं ओर पेंट्री से एक या अधिक सामग्री चुनें।" : "Select one or more ingredients from your pantry on the left to see recipe matches."}</p>
+                </div>
+              ) : pantryMatches.length ? (
                 <div className="pantry-match-list">
                   {pantryMatches.map((match) => (
                     <article className="pantry-match" key={match.item.id}>

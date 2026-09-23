@@ -262,6 +262,7 @@ export function matchPantryRecipes(
   recipes: ContentItem[],
   selectedIngredients: string[],
 ): PantryRecipeMatch[] {
+  if (!selectedIngredients.length) return [];
   return recipes
     .map((item) => {
       const recipeIngredients = item.meta.ingredients.map((ingredient) => ingredient.name);
@@ -281,8 +282,5 @@ export function matchPantryRecipes(
       return { item, has: [...new Set(has)], missing };
     })
     .filter((match) => selectedIngredients.length === 0 || match.has.length > 0)
-    .sort((left, right) => {
-      if (!selectedIngredients.length) return left.item.title.localeCompare(right.item.title);
-      return right.has.length - left.has.length || left.missing.length - right.missing.length || left.item.title.localeCompare(right.item.title);
-    });
+    .sort((left, right) => right.has.length - left.has.length || left.missing.length - right.missing.length || left.item.title.localeCompare(right.item.title));
 }

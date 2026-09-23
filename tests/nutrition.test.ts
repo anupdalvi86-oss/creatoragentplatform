@@ -70,6 +70,7 @@ test("pantry matches rank recipes by owned ingredients and report missing ingred
   assert.deepEqual(matches[0]?.has, ["chickpeas", "tortilla"]);
   assert.deepEqual(matches[0]?.missing, []);
   assert.deepEqual(matchPantryRecipes([bowl, wrap], ["rice"])[0]?.missing, ["potato"]);
+  assert.deepEqual(matchPantryRecipes([bowl, wrap], []), []);
 });
 
 test("pantry matches source descriptions and ingredient hints when quantities are unavailable", () => {
