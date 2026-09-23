@@ -118,7 +118,6 @@ type CreatorSetupResult = {
 };
 const cookingTools = [
   "searchCreatorKnowledge",
-  "findSubstitution",
   "calculateServings",
   "createMealPlan",
   "createShoppingList",

@@ -1105,7 +1105,6 @@ export default function App() {
         speak: "बोलकर बताएं",
         canMake: "क्या मैं इसे बना सकता हूँ?",
         planWeek: "सप्ताह की योजना",
-        findSubstitute: "विकल्प खोजें",
         favouriteIdeas: "पसंदीदा व्यंजन",
         explore: "व्यंजन देखें",
         ideasNow: "अभी के विचार",
@@ -1119,7 +1118,6 @@ export default function App() {
         listWord: "सूची।",
         checkIngredients: "सामग्री और उपकरण जांचें",
         easyDinners: "स्रोत-आधारित आसान डिनर",
-        clearlyLabelled: "स्पष्ट रूप से बताए गए सुझाव",
         addToMealPlan: "भोजन योजना में जोड़ें",
         chooseMealDay: "भोजन और दिन चुनें",
         meal: "भोजन",
@@ -1182,7 +1180,6 @@ export default function App() {
         speak: "Speak instead",
         canMake: "Can I make this?",
         planWeek: "Plan my week",
-        findSubstitute: "Find a substitute",
         favouriteIdeas: "Favourite recipes",
         explore: "Explore",
         ideasNow: "Ideas for right now",
@@ -1196,7 +1193,6 @@ export default function App() {
         listWord: "list.",
         checkIngredients: "Check ingredients & equipment",
         easyDinners: "Easy, source-based dinners",
-        clearlyLabelled: "Clearly labelled suggestions",
         addToMealPlan: "ADD TO MEAL PLAN",
         chooseMealDay: "Choose a meal and day",
         meal: "Meal",
@@ -1408,16 +1404,6 @@ export default function App() {
               <span>▦</span>
               <strong>{labels.planWeek}</strong>
               <small>{labels.easyDinners}</small>
-            </button>
-            <button
-              onClick={() => {
-                navigate("can-make");
-                setGoal("What can I use instead of cream?");
-              }}
-            >
-              <span>✦</span>
-              <strong>{labels.findSubstitute}</strong>
-              <small>{labels.clearlyLabelled}</small>
             </button>
             <button onClick={() => navigate("saved")}>
               <span>♡</span>
