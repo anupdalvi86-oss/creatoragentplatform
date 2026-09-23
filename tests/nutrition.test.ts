@@ -32,6 +32,12 @@ test("nutrition estimate omits numeric confidence when ingredients cannot be mea
   assert.deepEqual(result.unestimated, ["special sauce"]);
 });
 
+test("ingredient mentions without measured recipe quantities do not produce invented nutrition", () => {
+  const result = estimateNutrition({ ...meta, ingredients: [], ingredientHints: ["tomato", "onion", "garlic"] });
+  assert.equal(result.complete, false);
+  assert.deepEqual(result.perServing, { calories: 0, protein: 0, carbs: 0, fat: 0 });
+});
+
 test("provided nutrition values take precedence and explicit difficulty is respected", () => {
   const result = estimateNutrition({ ...meta, nutrition: { calories: 400, protein: 25, carbs: 30, fat: 12 } });
   assert.equal(result.basis, "provided");

@@ -331,6 +331,11 @@ function RecipeCard({
     ? `${item.meta.minutes} ${language === "hi" ? "मिनट" : "MIN"}`
     : language === "hi" ? "वीडियो" : "VIDEO";
   const nutrition = estimateNutrition(item.meta);
+  const nutritionUnavailable = !item.meta.ingredients.length
+    ? (language === "hi"
+        ? item.meta.ingredientHints?.length ? "मात्राएं नहीं दी गईं" : "सामग्री सूची उपलब्ध नहीं"
+        : item.meta.ingredientHints?.length ? "Amounts not provided" : "Ingredient list unavailable")
+    : (language === "hi" ? "पोषण अनुमान उपलब्ध नहीं" : "Nutrition estimate unavailable");
   const mark =
     item.meta.ingredients[0]?.name === "paneer"
       ? "◒"
@@ -362,7 +367,7 @@ function RecipeCard({
             ? (language === "hi"
                 ? `प्रति सर्विंग · ${nutrition.basis === "estimated" ? "≈ " : ""}${nutrition.perServing.calories} kcal · प्रोटीन ${nutrition.perServing.protein} g · कार्ब्स ${nutrition.perServing.carbs} g · वसा ${nutrition.perServing.fat} g`
                 : `Per serving · ${nutrition.basis === "estimated" ? "≈ " : ""}${nutrition.perServing.calories} kcal · ${nutrition.perServing.protein} g protein · ${nutrition.perServing.carbs} g carbs · ${nutrition.perServing.fat} g fat`)
-            : (language === "hi" ? "पोषण अनुमान उपलब्ध नहीं" : "Nutrition estimate unavailable")}
+            : nutritionUnavailable}
         </span>
         <span className="tag-row">
           {item.tags.slice(0, 2).map((tag) => (
@@ -385,6 +390,17 @@ function RecipeOverview({
   const nutrition = estimateNutrition(meta);
   const difficulty = recipeDifficulty(meta);
   const hindi = language === "hi";
+  const unavailableReason = !meta.ingredients.length
+    ? (meta.ingredientHints?.length
+        ? (hindi
+            ? "स्रोत में सामग्री का उल्लेख है, लेकिन सटीक मात्रा नहीं है। इसलिए पोषण का अनुमान नहीं लगाया गया।"
+            : "The source mentions ingredients but gives no exact amounts, so nutrition is not estimated.")
+        : (hindi
+            ? "स्रोत में उपयोग करने योग्य सामग्री सूची नहीं है, इसलिए पोषण का अनुमान नहीं लगाया जा सकता।"
+            : "The source has no usable ingredient list, so nutrition cannot be estimated."))
+    : (hindi
+        ? `इन सामग्रियों के लिए पोषण डेटा या समर्थित मात्रा उपलब्ध नहीं है${nutrition.unestimated.length ? `: ${nutrition.unestimated.join(", ")}` : "।"}`
+        : `Nutrition data or a supported unit is missing for${nutrition.unestimated.length ? `: ${nutrition.unestimated.join(", ")}` : " one or more ingredients."}`);
   const facts = [
     { label: hindi ? "कठिनाई" : "Difficulty", value: hindi ? ({ Easy: "आसान", Medium: "मध्यम", Hard: "कठिन" }[difficulty]) : difficulty },
     { label: hindi ? "तैयारी का समय" : "Prep. time", value: meta.prepMinutes ?? meta.minutes ? `${meta.prepMinutes ?? meta.minutes} ${hindi ? "मिनट" : "min"}` : "—" },
@@ -427,9 +443,7 @@ function RecipeOverview({
             ? (hindi
                 ? `प्रति सर्विंग अनुमान · ${meta.servings} सर्विंग · सामग्री औसत पर आधारित`
                 : `Estimated per serving · ${meta.servings} servings · based on generic ingredient averages`)
-            : (hindi
-                ? `इन सामग्रियों के लिए पोषण डेटा या समर्थित मात्रा उपलब्ध नहीं है${nutrition.unestimated.length ? `: ${nutrition.unestimated.join(", ")}` : "।"}`
-                : `Nutrition data or a supported unit is missing for${nutrition.unestimated.length ? `: ${nutrition.unestimated.join(", ")}` : " one or more ingredients."}`)}
+            : unavailableReason}
       </p>
     </section>
   );
