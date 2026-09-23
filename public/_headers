@@ -4,3 +4,12 @@
   X-Frame-Options: DENY
   Permissions-Policy: geolocation=(), camera=(), payment=()
   Content-Security-Policy: default-src 'self'; script-src 'self'; style-src 'self' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: https://*.ytimg.com; connect-src 'self'; object-src 'none'; base-uri 'self'; frame-ancestors 'none'
+
+/sw.js
+  Cache-Control: no-cache, max-age=0, must-revalidate
+
+/
+  Cache-Control: no-cache, max-age=0, must-revalidate
+
+/admin*
+  Cache-Control: no-cache, max-age=0, must-revalidate

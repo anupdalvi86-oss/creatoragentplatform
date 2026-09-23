@@ -245,6 +245,9 @@ async function executeEngineeringRole(env: Env, creatorId: string, roleKey: Spec
 
 async function executeOperationsRole(env: Env, creatorId: string, roleKey: SpecialistRoleKey, input: Record<string, unknown>): Promise<SpecialistExecution> {
   if (roleKey === "orchestrator") {
+    if (input.trigger === "creator-onboarding" && input.roleFanout === true) {
+      return { status: "completed", result: { status: "fanout_recorded", requestedRoleCount: SPECIALIST_ROLE_KEYS.length, note: "Creator onboarding dispatches each allowlisted role directly; engineering handlers remain review-only plans." } };
+    }
     const targetRoleKey = valueString(input, "targetRoleKey") as SpecialistRoleKey;
     if (!SPECIALIST_ROLE_KEYS.includes(targetRoleKey)) return blocked("Orchestrator requires an allowlisted targetRoleKey.", ["targetRoleKey"]);
     const child = await submitTask(env, { creatorId, roleKey: targetRoleKey, initiatorType: "system", initiatorId: valueString(input, "initiatorId") || "orchestrator", input: input.childInput && typeof input.childInput === "object" ? input.childInput as Record<string, unknown> : {}, idempotencyKey: `${valueString(input, "idempotencyKey") || id()}::${targetRoleKey}` });

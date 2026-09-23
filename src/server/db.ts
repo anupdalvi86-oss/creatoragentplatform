@@ -10,7 +10,23 @@ type CreatorRow = { id: string; slug: string; name: string; category: string; st
 type ContentRow = { id: string; creator_id: string; title: string; description: string; source_url: string; thumbnail_url: string | null; tags_json: string; structured_json: string; provenance_json: string; rights_status: string; published_at: string | null };
 export const id = () => crypto.randomUUID();
 export function json<T>(value: string): T { return JSON.parse(value) as T; }
-export function creatorFromRow(row: CreatorRow): Creator { return { id: row.id, slug: row.slug, name: row.name, creatorUrl: row.domain || undefined, category: row.category, status: row.status, brand: json(row.brand_json), agent: json(row.agent_json), monetization: json(row.monetization_json) }; }
+export function creatorFromRow(row: CreatorRow): Creator {
+  const legacyDemo = row.slug === 'anyone-can-cook-demo';
+  const storedBrand = json<Creator['brand']>(row.brand_json);
+  return {
+    id: row.id,
+    slug: row.slug,
+    name: legacyDemo ? 'Creator Kitchen Demo' : row.name,
+    creatorUrl: row.domain || undefined,
+    category: row.category,
+    status: row.status,
+    brand: legacyDemo
+      ? { ...storedBrand, hero: 'Your creator kitchen, ready to cook.', disclaimer: 'Illustrative demo workspace. Creator content and rights status are shown separately.' }
+      : storedBrand,
+    agent: json(row.agent_json),
+    monetization: json(row.monetization_json),
+  };
+}
 export function contentFromRow(row: ContentRow): ContentItem { return { id: row.id, creatorId: row.creator_id, title: cleanContentTitle(row.title), description: row.description, sourceUrl: row.source_url, thumbnailUrl: row.thumbnail_url, tags: json(row.tags_json), meta: json<RecipeMeta>(row.structured_json), provenance: json(row.provenance_json), rightsStatus: row.rights_status, publishedAt: row.published_at }; }
 export async function getCreator(db: D1Database, slug: string): Promise<Creator | null> {
   const row = await db.prepare('SELECT id,slug,name,category,status,domain,brand_json,agent_json,monetization_json FROM creators WHERE slug=? AND status IN (\'demo\',\'active\')').bind(slug).first<CreatorRow>();

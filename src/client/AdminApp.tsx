@@ -138,6 +138,13 @@ function normalizeCreatorUrl(value: string): string | undefined {
     throw new Error("Enter a valid Creator URL, such as https://youtube.com/@creator.");
   }
 }
+
+function adminRequestMessage(error: unknown): string {
+  if (error instanceof TypeError) {
+    return "The creator workspace could not be reached. Check the portal connection and try again.";
+  }
+  return error instanceof Error ? error.message : "The creator workspace could not be loaded.";
+}
 type ScoutResult = {
   runId: string;
   providerResults: Array<{ provider: string; status: string; count: number }>;
@@ -716,6 +723,13 @@ export default function AdminApp() {
   const advancedMode = new URLSearchParams(location.search).get("advanced") === "1";
 
   useEffect(() => {
+    document.title = "Creator Agent Platform Admin";
+    document
+      .querySelector('meta[name="description"]')
+      ?.setAttribute("content", "Creator Agent Platform operator workspace");
+  }, []);
+
+  useEffect(() => {
     setResearchUrl(selected?.creatorUrl || "");
     setChannelId(selected?.creatorUrl || "");
     setAudienceNotes("");
@@ -730,6 +744,7 @@ export default function AdminApp() {
   ): Promise<T> {
     let response = await fetch(`/api/admin${path}`, {
       method,
+      credentials: "same-origin",
       headers: {
         ...(token ? { Authorization: `Bearer ${token}` } : {}),
         ...(data ? { "Content-Type": "application/json" } : {}),
@@ -754,19 +769,35 @@ export default function AdminApp() {
         body: data ? JSON.stringify(data) : undefined,
       });
     }
-    const result = (await response.json()) as T & { error?: string };
-    if (!response.ok)
-      throw new Error(result.error || `Request failed (${response.status})`);
+    const responseText = await response.text();
+    let result: (T & { error?: string }) | null = null;
+    try {
+      result = JSON.parse(responseText) as T & { error?: string };
+    } catch {
+      throw new Error(
+        response.ok
+          ? "The creator workspace returned an invalid response."
+          : `Request failed (${response.status})`,
+      );
+    }
+    if (!response.ok) {
+      if (response.status === 401)
+        throw new Error("Admin access is required. Sign in through Cloudflare Access, then refresh.");
+      throw new Error(result?.error || `Request failed (${response.status})`);
+    }
     return result;
   }
   async function loadCreators() {
+    setBusy(true);
     try {
       const list = await admin<Creator[]>("/creators");
       setCreators(list);
       setSelectedId((current) => current || list[0]?.id || "");
       setMessage("");
     } catch (error) {
-      setMessage((error as Error).message);
+      setMessage(adminRequestMessage(error));
+    } finally {
+      setBusy(false);
     }
   }
   useEffect(() => {

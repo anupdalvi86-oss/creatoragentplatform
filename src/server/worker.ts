@@ -4,6 +4,7 @@ import { canMake } from "./agent";
 import { checkOrigin, getSession, getAdminRole } from "./auth";
 import {
   contentFromRow,
+  creatorFromRow,
   getContent,
   getCreator,
   id,
@@ -41,6 +42,8 @@ import {
   type TaskSubmission,
 } from "./agentTasks";
 import { dispatchTask, runTaskById, advanceTaskHandoff } from "./agentTaskRunner";
+import { SPECIALIST_ROLE_KEYS } from "./specialistAgents";
+import { creatorOnboardingJobs } from "./creatorOnboarding";
 export { AgentTaskWorkflow } from "./agentWorkflow";
 
 const reply = (data: unknown, status = 200, cookie?: string) =>
@@ -1078,17 +1081,7 @@ async function importCreatorMetadata(env: Env, creatorId: string, creatorUrl?: s
 async function runCreatorSetupAgents(env: Env, creatorId: string, creatorUrl: string, platform: "youtube" | "instagram" | "other") {
   const rows = await env.DB.prepare("SELECT id FROM content_items WHERE creator_id=? AND processing_status='ready' ORDER BY created_at DESC LIMIT 25").bind(creatorId).all<{ id: string }>();
   const contentIds = (rows.results || []).map((row) => row.id);
-  const jobs: Array<{ roleKey: string; input: Record<string, unknown> }> = [
-    { roleKey: "creator_scout", input: { url: creatorUrl, category: "cooking" } },
-    { roleKey: "rights_reviewer", input: {} },
-    { roleKey: "content_librarian", input: {} },
-    { roleKey: "data_quality_monitor", input: {} },
-    { roleKey: "model_router", input: { policy: "STANDARD" } },
-    { roleKey: "cost_monitor", input: {} },
-  ];
-  if (platform === "youtube") jobs.splice(1, 0, { roleKey: "youtube_ingestion", input: { channelUrl: creatorUrl } });
-  if (platform === "instagram") jobs.splice(1, 0, { roleKey: "instagram_ingestion", input: {} });
-  if (contentIds.length) jobs.push({ roleKey: "source_verifier", input: { sourceContentIds: contentIds } });
+  const jobs = creatorOnboardingJobs(creatorUrl, platform, contentIds);
   const tasks: Array<{ roleKey: string; taskId?: string; status: string; error?: string }> = [];
   for (const job of jobs) {
     try {
@@ -1411,20 +1404,18 @@ async function adminRoute(
   if (request.method === "GET" && path[0] === "creators") {
     const rows = await env.DB.prepare(
       "SELECT id,slug,name,category,status,domain,brand_json,agent_json,monetization_json FROM creators ORDER BY name",
-    ).all();
-    return reply(
-      rows.results.map((row) => ({
-        id: row.id,
-        slug: row.slug,
-        name: row.name,
-        creatorUrl: row.domain || undefined,
-        category: row.category,
-        status: row.status,
-        brand: json(String(row.brand_json)),
-        agent: json(String(row.agent_json)),
-        monetization: json(String(row.monetization_json)),
-      })),
-    );
+    ).all<{
+      id: string;
+      slug: string;
+      name: string;
+      category: string;
+      status: string;
+      domain: string | null;
+      brand_json: string;
+      agent_json: string;
+      monetization_json: string;
+    }>();
+    return reply(rows.results.map((row) => creatorFromRow(row)));
   }
   if (request.method === "POST" && path[0] === "creator-setup") {
     const input = z.object({
@@ -1456,6 +1447,7 @@ async function adminRoute(
       existing: Boolean(existing),
       contentImport,
       tasks,
+      onboarding: { requestedRoleCount: SPECIALIST_ROLE_KEYS.length, dispatchedRoleCount: tasks.filter((task) => task.taskId).length },
       pwaUrl: `/creator/${creator.slug}`,
     }, existing ? 200 : 201);
   }

@@ -153,7 +153,19 @@ function localizedEquipment(value: string, language: Language): string {
   return names[value.toLowerCase()] || value;
 }
 function creatorDisplayName(name: string): string {
-  return name.replace(/\s+with\s+dr\.?\s+alisha\s*$/i, "").trim() || name;
+  return name.trim() || "Kitchen Companion";
+}
+function creatorKitchenHero(name: string): string {
+  return `Welcome to ${creatorDisplayName(name)}’s Kitchen`;
+}
+function creatorInitials(name: string): string {
+  const words = creatorDisplayName(name)
+    .replace(/[^a-zA-Z0-9 ]/g, " ")
+    .split(/\s+/)
+    .filter(Boolean);
+  return (words.length > 1
+    ? `${words[0]?.[0] || ""}${words[1]?.[0] || ""}`
+    : words[0]?.slice(0, 2) || "KC").toUpperCase();
 }
 function isDinnerCandidate(item: ContentItem): boolean {
   const searchableText = `${item.title} ${item.description} ${item.tags.join(" ")}`;
@@ -303,6 +315,10 @@ export default function App() {
       .then(([c, items]) => {
         setCreator(c);
         setContent(items.items);
+        document.title = creatorDisplayName(c.name);
+        document
+          .querySelector('meta[name="description"]')
+          ?.setAttribute("content", c.brand.disclaimer || "Creator kitchen workspace");
         api<{
           familySize?: number;
           diet?: string[];
@@ -1053,11 +1069,13 @@ export default function App() {
           type="button"
           onClick={() => navigate("home")}
         >
-          <span className="brand-symbol">AC</span>
+          <span className="brand-symbol">
+            {creatorInitials(creator?.name || "Kitchen Companion")}
+          </span>
           <span>
             {creatorDisplayName(creator?.name || "Kitchen Companion")}
             <small>
-              WITH DR. ALISHA
+              {creator?.category === "cooking" ? "COOKING CREATOR" : "CREATOR WORKSPACE"}
             </small>
           </span>
         </button>
@@ -1107,11 +1125,11 @@ export default function App() {
         <main>
           <section className="hero">
             <div className="hero-copy">
-              <p className="eyebrow">ANYONE CAN COOK · WITH DR. ALISHA</p>
-              <h1>{creator?.brand.hero || "What should we cook today?"}</h1>
+              <p className="eyebrow">{creatorDisplayName(creator?.name || "Your cooking workspace")}</p>
+              <h1>{creatorKitchenHero(creator?.name || "Kitchen Companion")}</h1>
               <p>
-                Easy recipes, creative twists, and delicious ideas for every
-                food lover.
+                Simple recipes, everyday ideas, and a little help deciding what
+                to cook.
               </p>
               <div className="hero-actions">
                 <button

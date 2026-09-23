@@ -34,7 +34,7 @@ This is the **requested scope** and now maps to 32 runnable role handlers behind
 
 ## Product development through Hermes
 
-These are **engineering workflows**, not public API roles. Implement as scoped Hermes task instructions/automation over a feature branch, not as write-capable public Worker endpoints.
+These are **engineering workflows**, not write-capable public API roles. Onboarding may enqueue their bounded review-only plans/checklists for observability, but actual repository work remains scoped Hermes work over a feature branch.
 
 | Role | Status | First useful deliverable and boundary |
 |---|---|---|
