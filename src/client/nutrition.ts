@@ -25,12 +25,16 @@ type FoodProfile = NutritionValues & {
 // label values; actual ingredients and preparation can change the result.
 const profiles: Record<string, FoodProfile> = {
   avocado: { calories: 160, protein: 2, carbs: 8.5, fat: 14.7, gramsEach: 150 },
+  "baking powder": { calories: 53, protein: 0, carbs: 28, fat: 0, gramsPerTsp: 4 },
+  "baking soda": { calories: 0, protein: 0, carbs: 0, fat: 0, gramsPerTsp: 4.6 },
   beans: { calories: 127, protein: 8.7, carbs: 22.8, fat: 0.5, gramsPerCup: 170 },
   "bell pepper": { calories: 31, protein: 1, carbs: 6, fat: 0.3, gramsEach: 120, gramsPerCup: 149 },
   butter: { calories: 717, protein: 0.9, carbs: 0.1, fat: 81, gramsPerTbsp: 14, gramsPerTsp: 4.7 },
   cabbage: { calories: 25, protein: 1.3, carbs: 5.8, fat: 0.1, gramsPerCup: 89 },
   cilantro: { calories: 23, protein: 2.1, carbs: 3.7, fat: 0.5, gramsPerCup: 16 },
   chickpeas: { calories: 164, protein: 8.9, carbs: 27.4, fat: 2.6, gramsPerCup: 164 },
+  "cocoa powder": { calories: 228, protein: 19.6, carbs: 57.9, fat: 13.7, gramsPerCup: 86, gramsPerTbsp: 5 },
+  "coffee powder": { calories: 353, protein: 12.2, carbs: 75.4, fat: 0.5, gramsPerTsp: 2 },
   corn: { calories: 86, protein: 3.3, carbs: 19, fat: 1.4, gramsPerCup: 145 },
   cucumber: { calories: 15, protein: 0.7, carbs: 3.6, fat: 0.1, gramsEach: 300, gramsPerCup: 104 },
   cumin: { calories: 375, protein: 18, carbs: 44, fat: 22, gramsPerTsp: 2.1 },
@@ -45,12 +49,14 @@ const profiles: Record<string, FoodProfile> = {
   jalapeño: { calories: 29, protein: 0.9, carbs: 6.5, fat: 0.4, gramsEach: 14 },
   lettuce: { calories: 15, protein: 1.4, carbs: 2.9, fat: 0.2, gramsPerCup: 36 },
   "olive oil": { calories: 884, protein: 0, carbs: 0, fat: 100, gramsPerTbsp: 13.5, gramsPerTsp: 4.5 },
+  oil: { calories: 884, protein: 0, carbs: 0, fat: 100, gramsPerCup: 218, gramsPerTbsp: 13.5, gramsPerTsp: 4.5 },
   onion: { calories: 40, protein: 1.1, carbs: 9.3, fat: 0.1, gramsEach: 110, gramsPerCup: 160 },
   paprika: { calories: 282, protein: 14.1, carbs: 53.9, fat: 12.9, gramsPerTsp: 2.3 },
   parsley: { calories: 36, protein: 3, carbs: 6.3, fat: 0.8, gramsPerCup: 60 },
   pasta: { calories: 371, protein: 13, carbs: 75, fat: 1.5 },
   paneer: { calories: 265, protein: 18, carbs: 1.2, fat: 20.8 },
   "plain yogurt": { calories: 61, protein: 3.5, carbs: 4.7, fat: 3.3, gramsPerCup: 245 },
+  milk: { calories: 61, protein: 3.2, carbs: 4.8, fat: 3.3, gramsPerCup: 244, gramsPerTbsp: 15, gramsPerTsp: 5 },
   potato: { calories: 77, protein: 2, carbs: 17.5, fat: 0.1, gramsEach: 173 },
   "red cabbage": { calories: 31, protein: 1.4, carbs: 7.4, fat: 0.2, gramsPerCup: 89 },
   rice: { calories: 365, protein: 7.1, carbs: 80, fat: 0.7, gramsPerCup: 185 },
@@ -68,7 +74,25 @@ const profiles: Record<string, FoodProfile> = {
   turmeric: { calories: 312, protein: 9.7, carbs: 67, fat: 3.3, gramsPerTsp: 3 },
   water: { calories: 0, protein: 0, carbs: 0, fat: 0, gramsPerCup: 240 },
   "white beans": { calories: 139, protein: 9.7, carbs: 25, fat: 0.4, gramsPerCup: 179 },
+  "wheat flour": { calories: 364, protein: 10.3, carbs: 76.3, fat: 1, gramsPerCup: 120 },
   yogurt: { calories: 61, protein: 3.5, carbs: 4.7, fat: 3.3, gramsPerCup: 245 },
+};
+
+const profileAliases: Record<string, string> = {
+  "all purpose flour": "wheat flour",
+  "all-purpose flour": "wheat flour",
+  "canola oil": "oil",
+  "cocoa": "cocoa powder",
+  "coconut oil": "oil",
+  "cooking oil": "oil",
+  "full-fat milk": "milk",
+  "instant coffee": "coffee powder",
+  "instant coffee powder": "coffee powder",
+  "mustard oil": "oil",
+  "plain flour": "wheat flour",
+  "sunflower oil": "oil",
+  "vegetable oil": "oil",
+  "whole milk": "milk",
 };
 
 function keyOf(name: string): string {
@@ -145,7 +169,7 @@ export function estimateNutrition(meta: RecipeMeta): NutritionEstimate {
   const unestimated: string[] = [];
   for (const ingredient of meta.ingredients) {
     const key = keyOf(ingredient.name);
-    const profile = profiles[key];
+    const profile = profiles[profileAliases[key] || key];
     const grams = profile && gramsFor(ingredient, profile);
     if (!profile || grams === null || grams === undefined) {
       unestimated.push(ingredient.name);

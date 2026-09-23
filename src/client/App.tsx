@@ -428,8 +428,8 @@ function RecipeOverview({
                 ? `प्रति सर्विंग अनुमान · ${meta.servings} सर्विंग · सामग्री औसत पर आधारित`
                 : `Estimated per serving · ${meta.servings} servings · based on generic ingredient averages`)
             : (hindi
-                ? `पोषण अनुमान के लिए मात्रा या सामग्री पहचान नहीं सके${nutrition.unestimated.length ? `: ${nutrition.unestimated.join(", ")}` : ""}`
-                : `Nutrition estimate needs known amounts for every ingredient${nutrition.unestimated.length ? `: ${nutrition.unestimated.join(", ")}` : "."}`)}
+                ? `इन सामग्रियों के लिए पोषण डेटा या समर्थित मात्रा उपलब्ध नहीं है${nutrition.unestimated.length ? `: ${nutrition.unestimated.join(", ")}` : "।"}`
+                : `Nutrition data or a supported unit is missing for${nutrition.unestimated.length ? `: ${nutrition.unestimated.join(", ")}` : " one or more ingredients."}`)}
       </p>
     </section>
   );

@@ -51,6 +51,24 @@ test("nutrition calculator parses common quantity formats and leaves vague quant
   assert.deepEqual(result.unestimated, ["Butter"]);
 });
 
+test("nutrition covers common baking ingredients with measured quantities", () => {
+  const ingredients = parseNutritionIngredients([
+    "1/4 cup oil",
+    "1/3 cup yogurt",
+    "1 tsp coffee powder",
+    "1 cup wheat flour",
+    "1/4 cup cocoa powder",
+    "1 tsp baking powder",
+    "1/4 tsp baking soda",
+    "1 cup milk",
+  ].join("\n"));
+  const result = estimateNutrition({ ...meta, servings: 1, ingredients });
+  assert.equal(result.complete, true);
+  assert.deepEqual(result.unestimated, []);
+  assert.ok(result.perServing.calories > 0);
+  assert.ok(result.perServing.protein > 0);
+});
+
 test("pantry matches rank recipes by owned ingredients and report missing ingredients", () => {
   const wrap: ContentItem = {
     id: "wrap", creatorId: "creator", title: "Chickpea Wrap", description: "", sourceUrl: "/wrap",
