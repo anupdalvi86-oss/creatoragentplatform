@@ -1,4 +1,4 @@
-import type { Ingredient, RecipeMeta } from "../shared/types";
+import type { ContentItem, Ingredient, RecipeMeta } from "../shared/types";
 
 export type NutritionValues = {
   calories: number;
@@ -175,4 +175,37 @@ export function recipeDifficulty(meta: RecipeMeta): "Easy" | "Medium" | "Hard" {
   if (meta.minutes > 60 || meta.ingredients.length > 14) return "Hard";
   if (meta.minutes > 35 || meta.ingredients.length > 9) return "Medium";
   return "Easy";
+}
+
+export type PantryRecipeMatch = {
+  item: ContentItem;
+  has: string[];
+  missing: string[];
+};
+
+function pantryKey(value: string): string {
+  return value.toLowerCase().trim().replace(/\s+/g, " ").replace(/s$/, "");
+}
+
+export function matchPantryRecipes(
+  recipes: ContentItem[],
+  selectedIngredients: string[],
+): PantryRecipeMatch[] {
+  const selected = new Set(selectedIngredients.map(pantryKey));
+  return recipes
+    .filter((item) => item.meta.ingredients.length > 0)
+    .map((item) => {
+      const has = item.meta.ingredients
+        .map((ingredient) => ingredient.name)
+        .filter((name) => selected.has(pantryKey(name)));
+      const missing = item.meta.ingredients
+        .map((ingredient) => ingredient.name)
+        .filter((name) => !selected.has(pantryKey(name)));
+      return { item, has, missing };
+    })
+    .filter((match) => selected.size === 0 || match.has.length > 0)
+    .sort((left, right) => {
+      if (!selected.size) return left.item.title.localeCompare(right.item.title);
+      return right.has.length - left.has.length || left.missing.length - right.missing.length || left.item.title.localeCompare(right.item.title);
+    });
 }

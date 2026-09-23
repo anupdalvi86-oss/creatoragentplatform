@@ -636,3 +636,33 @@ body { font-family: 'Montserrat', system-ui, sans-serif; color: var(--brand-ink)
 .recipe-card { min-height: 192px; }
 .recipe-nutrition-strip { display: block; max-width: 100%; color: var(--brand-blue-dark); font-size: 10px; font-weight: 700; line-height: 1.4; letter-spacing: -.01em; }
 @media (max-width: 800px) { .recipe-card { min-height: 184px; } }
+.nutrition-page { max-width: 1240px; }
+.pantry-layout { display: grid; grid-template-columns: minmax(260px, 330px) minmax(0, 1fr); gap: 24px; align-items: start; }
+.pantry-panel, .pantry-results { min-width: 0; padding: 22px; border: 1px solid var(--line); border-radius: 20px; background: var(--surface); box-shadow: 0 10px 28px #5c45240a; }
+.pantry-panel-heading, .pantry-results-heading { display: flex; align-items: end; justify-content: space-between; gap: 12px; margin-bottom: 16px; }
+.pantry-panel-heading .eyebrow, .pantry-results-heading .eyebrow { margin-bottom: 7px !important; }
+.pantry-panel-heading h2, .pantry-results-heading h2 { margin: 0; color: var(--ink); font-size: 24px; letter-spacing: -.035em; }
+.pantry-count { display: grid; place-items: center; min-width: 32px; height: 32px; padding: 0 8px; border-radius: 50%; background: var(--panel); color: var(--accent-dark); font-size: 12px; font-weight: 800; }
+.pantry-selected, .pantry-ingredient-list { display: flex; flex-wrap: wrap; gap: 8px; }
+.pantry-selected { margin: 0 0 15px; }
+.pantry-selected button, .pantry-ingredient-list button { min-height: 36px; padding: 8px 11px; border: 1px solid var(--line); border-radius: 9px; background: #f1f3f6; color: #666c73; font-size: 12px; }
+.pantry-selected button { background: #e7f3df; border-color: #b9d7a8; color: #385e28; }
+.pantry-selected button span { padding-left: 5px; font-size: 16px; }
+.pantry-ingredient-list button:hover, .pantry-ingredient-list button.active { background: #e7f3df; border-color: #a4ce8b; color: #385e28; }
+.pantry-add-row { display: flex; gap: 7px; }
+.pantry-add-row input { min-width: 0; flex: 1; height: 44px; padding: 0 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface-strong); color: var(--ink); }
+.pantry-add-row button { width: 44px; border: 0; border-radius: 10px; background: var(--accent-dark); color: white; font-size: 24px; }
+.pantry-help, .pantry-results-help { margin: 9px 0 15px; color: var(--muted-ink); font-size: 12px; line-height: 1.5; }
+.pantry-ingredient-list { max-height: 420px; overflow-y: auto; align-content: start; }
+.pantry-no-ingredient { color: var(--muted-ink); font-size: 12px; }
+.pantry-match-list { display: grid; gap: 13px; }
+.pantry-match { min-width: 0; overflow: hidden; border: 1px solid var(--line); border-radius: 16px; background: var(--surface-strong); }
+.pantry-match .recipe-card { border: 0; border-radius: 0; box-shadow: none; }
+.pantry-match-details { margin: 0; padding: 10px 15px; border-top: 1px solid var(--line); color: var(--muted-ink); font-size: 12px; line-height: 1.5; }
+.pantry-match-details strong { color: var(--ink); }
+.pantry-nutrition-selector { margin-top: 26px; padding-top: 22px; border-top: 1px solid var(--line); }
+.pantry-nutrition-selector>.eyebrow { margin-bottom: 10px !important; }
+.pantry-nutrition-selector .recipe-overview { margin-top: 14px; }
+.nutrition-calculator summary { color: var(--accent-dark); cursor: pointer; font-size: 16px; font-weight: 800; }
+.nutrition-calculator[open] summary { margin-bottom: 20px; }
+@media (max-width: 850px) { .pantry-layout { grid-template-columns: 1fr; } .pantry-panel { position: static; } .pantry-ingredient-list { max-height: 300px; } }

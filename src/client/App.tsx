@@ -6,7 +6,7 @@ import type {
   Ingredient,
   RecipeMeta,
 } from "../shared/types";
-import { estimateNutrition, parseNutritionIngredients, recipeDifficulty } from "./nutrition";
+import { estimateNutrition, matchPantryRecipes, parseNutritionIngredients, recipeDifficulty } from "./nutrition";
 
 type Screen =
   | "home"
@@ -351,6 +351,8 @@ export default function App() {
   const [nutritionServings, setNutritionServings] = useState(2);
   const [nutritionIngredientText, setNutritionIngredientText] = useState("");
   const [customNutritionMeta, setCustomNutritionMeta] = useState<RecipeMeta | null>(null);
+  const [pantryIngredients, setPantryIngredients] = useState<string[]>([]);
+  const [pantrySearch, setPantrySearch] = useState("");
   const [selected, setSelected] = useState<ContentItem | null>(null);
   const [query, setQuery] = useState("");
   const [goal, setGoal] = useState("");
@@ -536,6 +538,23 @@ export default function App() {
   const catalogRecipes = useMemo(
     () => content.filter((item) => item.meta.ingredients.length > 0),
     [content],
+  );
+  const availablePantryIngredients = useMemo(() => {
+    const ingredients = new Map<string, string>();
+    for (const recipe of catalogRecipes) {
+      for (const ingredient of recipe.meta.ingredients) {
+        const key = ingredient.name.toLowerCase().trim();
+        if (key && !ingredients.has(key)) ingredients.set(key, ingredient.name);
+      }
+    }
+    return [...ingredients.values()].sort((left, right) => left.localeCompare(right));
+  }, [catalogRecipes]);
+  const visiblePantryIngredients = availablePantryIngredients.filter((name) =>
+    name.toLowerCase().includes(pantrySearch.trim().toLowerCase()),
+  );
+  const pantryMatches = useMemo(
+    () => matchPantryRecipes(catalogRecipes, pantryIngredients),
+    [catalogRecipes, pantryIngredients],
   );
   useEffect(() => {
     if (!query.trim() || !creator) return;
@@ -987,7 +1006,7 @@ export default function App() {
     ? {
         favourites: "पसंदीदा",
         nutrition: "पोषण तथ्य",
-        nutritionDescription: "रेसिपी में कैलोरी और मैक्रो देखें",
+        nutritionDescription: "पेंट्री की सामग्री से रेसिपी खोजें",
         chooseRecipe: "रेसिपी चुनें",
         myKitchen: "मेरी रसोई",
         myPlan: "मेरी योजना",
@@ -1064,7 +1083,7 @@ export default function App() {
     : {
         favourites: "Favourites",
         nutrition: "Nutrition",
-        nutritionDescription: "View calories and macros for a recipe",
+        nutritionDescription: "Find recipes from ingredients you have",
         chooseRecipe: "Choose a recipe",
         myKitchen: "My kitchen",
         myPlan: "My plan",
@@ -1156,6 +1175,13 @@ export default function App() {
       servings: Math.max(1, Math.min(50, nutritionServings)),
       ingredients: parsed,
     });
+  }
+  function addPantryIngredient() {
+    const value = pantrySearch.trim();
+    if (!value) return;
+    if (!pantryIngredients.some((ingredient) => ingredient.toLowerCase() === value.toLowerCase()))
+      setPantryIngredients((current) => [...current, value]);
+    setPantrySearch("");
   }
   if (!creator && !error)
     return <main className="loading">Preparing the kitchen…</main>;
@@ -1527,45 +1553,110 @@ export default function App() {
             {labels.backHome}
           </button>
           <div className="page-title">
-            <p className="eyebrow">{labels.nutrition}</p>
-            <h1>{language === "hi" ? "अपनी रेसिपी जानें।" : "Know what’s on your plate."}</h1>
-            <p>{language === "hi" ? "कैटलॉग से रेसिपी चुनें। पोषण मान सूचीबद्ध सामग्री और सर्विंग के आधार पर अनुमान हैं।" : "Choose a recipe from the catalog. Nutrition values are estimates based on listed ingredients and servings."}</p>
+            <p className="eyebrow">{language === "hi" ? "आज क्या पकाएं" : "LET’S FIGURE IT OUT"}</p>
+            <h1>{language === "hi" ? "मेरी पेंट्री से मैं क्या बना सकता हूँ?" : "What can I make using my pantry?"}</h1>
+            <p>{language === "hi" ? "अपनी सामग्री चुनें। हम पहले रेसिपी कैटलॉग में मिलते-जुलते व्यंजन खोजेंगे।" : "Select ingredients you have. We’ll find the closest matches in this recipe catalog first."}</p>
           </div>
-          {catalogRecipes.length ? (
-            <>
-              <label className="nutrition-recipe-picker">
-                {labels.chooseRecipe}
-                <select
-                  value={nutritionRecipeId || catalogRecipes[0]!.id}
-                  onChange={(event) => setNutritionRecipeId(event.target.value)}
-                >
-                  {catalogRecipes.map((recipe) => (
-                    <option key={recipe.id} value={recipe.id}>{recipe.title}</option>
-                  ))}
-                </select>
-              </label>
-              {(() => {
-                const recipe = catalogRecipes.find((item) => item.id === nutritionRecipeId) || catalogRecipes[0]!;
-                return (
-                  <section className="nutrition-result">
-                    <h2>{recipe.title}</h2>
-                    <RecipeOverview meta={recipe.meta} language={language} />
-                    <button className="secondary" onClick={() => open(recipe)}>
-                      {language === "hi" ? "पूरी रेसिपी खोलें" : "Open recipe"} →
+          <div className="pantry-layout">
+            <section className="pantry-panel" aria-labelledby="pantry-ingredients-title">
+              <div className="pantry-panel-heading">
+                <div>
+                  <p className="eyebrow">{language === "hi" ? "आपके पास क्या है" : "YOUR INGREDIENTS"}</p>
+                  <h2 id="pantry-ingredients-title">{language === "hi" ? "मेरी पेंट्री" : "My pantry"}</h2>
+                </div>
+                <span className="pantry-count">{pantryIngredients.length}</span>
+              </div>
+              {pantryIngredients.length > 0 && (
+                <div className="pantry-selected" aria-label={language === "hi" ? "चुनी गई सामग्री" : "Selected ingredients"}>
+                  {pantryIngredients.map((ingredient) => (
+                    <button key={ingredient} type="button" aria-pressed="true" onClick={() => setPantryIngredients((current) => current.filter((value) => value !== ingredient))}>
+                      {localizedIngredient(ingredient, language)} <span aria-hidden="true">×</span>
                     </button>
-                  </section>
-                );
-              })()}
-            </>
-          ) : (
-            <div className="creator-empty" role="status">
-              <strong>{language === "hi" ? "अभी कोई सामग्री वाली रेसिपी नहीं है।" : "No recipes with ingredient lists yet."}</strong>
-              <p>{language === "hi" ? "पोषण अनुमान देखने के लिए सामग्री वाली रेसिपी जोड़ें।" : "Add a recipe with ingredient quantities to see a nutrition estimate."}</p>
-            </div>
-          )}
-          <section className="nutrition-calculator">
-            <p className="eyebrow">{language === "hi" ? "अपना अनुमान बनाएं" : "MAKE A QUICK ESTIMATE"}</p>
-            <h2>{language === "hi" ? "सामग्री डालें" : "Estimate a recipe"}</h2>
+                  ))}
+                </div>
+              )}
+              <div className="pantry-add-row">
+                <input
+                  value={pantrySearch}
+                  onChange={(event) => setPantrySearch(event.target.value)}
+                  onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); addPantryIngredient(); } }}
+                  placeholder={language === "hi" ? "सामग्री खोजें या जोड़ें" : "Find or add an ingredient"}
+                  aria-label={language === "hi" ? "सामग्री खोजें या जोड़ें" : "Find or add an ingredient"}
+                />
+                <button type="button" onClick={addPantryIngredient} aria-label={language === "hi" ? "सामग्री जोड़ें" : "Add ingredient"}>+</button>
+              </div>
+              <p className="pantry-help">{language === "hi" ? "नीचे से सामग्री चुनें या अपनी सामग्री जोड़ें।" : "Choose ingredients from the catalog, or add your own."}</p>
+              <div className="pantry-ingredient-list">
+                {visiblePantryIngredients.map((ingredient) => {
+                  const active = pantryIngredients.includes(ingredient);
+                  return (
+                    <button key={ingredient} type="button" className={active ? "active" : ""} aria-pressed={active} onClick={() => setPantryIngredients((current) => active ? current.filter((value) => value !== ingredient) : [...current, ingredient])}>
+                      {localizedIngredient(ingredient, language)}
+                    </button>
+                  );
+                })}
+                {!visiblePantryIngredients.length && pantrySearch.trim() && (
+                  <p className="pantry-no-ingredient">{language === "hi" ? "Enter या + दबाकर अपनी सामग्री जोड़ें।" : "Press Enter or + to add your ingredient."}</p>
+                )}
+              </div>
+            </section>
+            <section className="pantry-results" aria-labelledby="pantry-results-title">
+              <div className="pantry-results-heading">
+                <div>
+                  <p className="eyebrow">{language === "hi" ? "कैटलॉग से मेल" : "FROM YOUR RECIPE CATALOG"}</p>
+                  <h2 id="pantry-results-title">{language === "hi" ? "आप क्या बना सकते हैं" : "Recipes you can make"}</h2>
+                </div>
+                <span className="count">{pantryMatches.length} {language === "hi" ? "रेसिपी" : "recipes"}</span>
+              </div>
+              <p className="pantry-results-help">
+                {pantryIngredients.length
+                  ? (language === "hi" ? `आपके ${pantryIngredients.length} चुने हुए सामग्री से सबसे अच्छे मेल पहले दिखाए गए हैं।` : `Closest matches for your ${pantryIngredients.length} selected ingredient${pantryIngredients.length === 1 ? "" : "s"} appear first.`)
+                  : (language === "hi" ? "रेसिपी मिलान देखने के लिए बाईं ओर सामग्री चुनें।" : "Select ingredients on the left to rank recipes by how well they match.")}
+              </p>
+              {pantryMatches.length ? (
+                <div className="pantry-match-list">
+                  {pantryMatches.map((match) => (
+                    <article className="pantry-match" key={match.item.id}>
+                      <RecipeCard item={match.item} language={language} onOpen={() => open(match.item)} />
+                      {pantryIngredients.length > 0 && (
+                        <p className="pantry-match-details">
+                          <strong>{language === "hi" ? "आपके पास है:" : "You have:"}</strong> {match.has.map((name) => localizedIngredient(name, language)).join(", ")}
+                          {match.missing.length > 0 && <><span> · </span><strong>{language === "hi" ? "अभी चाहिए:" : "Still needed:"}</strong> {match.missing.slice(0, 4).map((name) => localizedIngredient(name, language)).join(", ")}{match.missing.length > 4 ? ` +${match.missing.length - 4}` : ""}</>}
+                        </p>
+                      )}
+                    </article>
+                  ))}
+                </div>
+              ) : (
+                <div className="creator-empty" role="status">
+                  <strong>{language === "hi" ? "इन सामग्री से कोई मेल नहीं मिला।" : "No recipes match those ingredients yet."}</strong>
+                  <p>{language === "hi" ? "कुछ सामग्री हटाएं या कोई दूसरी सामग्री चुनें।" : "Remove an ingredient or choose another one to see more matches."}</p>
+                </div>
+              )}
+              {catalogRecipes.length > 0 && (
+                <section className="pantry-nutrition-selector">
+                  <p className="eyebrow">{language === "hi" ? "प्रति सर्विंग पोषण" : "NUTRITION PER SERVING"}</p>
+                  <label className="nutrition-recipe-picker">
+                    {language === "hi" ? "पोषण देखने के लिए रेसिपी चुनें" : "Choose a recipe to see its nutrition"}
+                    <select
+                      value={nutritionRecipeId || catalogRecipes[0]!.id}
+                      onChange={(event) => setNutritionRecipeId(event.target.value)}
+                    >
+                      {catalogRecipes.map((recipe) => (
+                        <option key={recipe.id} value={recipe.id}>{recipe.title}</option>
+                      ))}
+                    </select>
+                  </label>
+                  {(() => {
+                    const recipe = catalogRecipes.find((item) => item.id === nutritionRecipeId) || catalogRecipes[0]!;
+                    return <RecipeOverview meta={recipe.meta} language={language} />;
+                  })()}
+                </section>
+              )}
+            </section>
+          </div>
+          <details className="nutrition-calculator">
+            <summary>{language === "hi" ? "कस्टम रेसिपी का पोषण अनुमान" : "Estimate nutrition for a custom recipe"}</summary>
             <p className="nutrition-intro">{language === "hi" ? "सामग्री की मात्रा प्रति पंक्ति लिखें। यह केवल एक असहेजा हुआ अनुमान बनाएगा।" : "Enter ingredient amounts one per line. This creates an unsaved estimate only."}</p>
             <label>
               {language === "hi" ? "रेसिपी का नाम" : "Recipe name"}
@@ -1588,7 +1679,7 @@ export default function App() {
                 <RecipeOverview meta={customNutritionMeta} language={language} />
               </div>
             )}
-          </section>
+          </details>
         </main>
       )}
       {screen === "plan" && (

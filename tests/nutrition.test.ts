@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import type { RecipeMeta } from "../src/shared/types";
-import { estimateNutrition, parseNutritionIngredients, recipeDifficulty } from "../src/client/nutrition";
+import type { ContentItem, RecipeMeta } from "../src/shared/types";
+import { estimateNutrition, matchPantryRecipes, parseNutritionIngredients, recipeDifficulty } from "../src/client/nutrition";
 
 const meta: RecipeMeta = {
   minutes: 20,
@@ -49,4 +49,25 @@ test("nutrition calculator parses common quantity formats and leaves vague quant
   const result = estimateNutrition({ ...meta, ingredients: parsed });
   assert.equal(result.complete, false);
   assert.deepEqual(result.unestimated, ["Butter"]);
+});
+
+test("pantry matches rank recipes by owned ingredients and report missing ingredients", () => {
+  const wrap: ContentItem = {
+    id: "wrap", creatorId: "creator", title: "Chickpea Wrap", description: "", sourceUrl: "/wrap",
+    thumbnailUrl: null, tags: [], meta: { ...meta, ingredients: [
+      { name: "chickpeas", quantity: 1, unit: "cup", category: "protein" },
+      { name: "tortilla", quantity: 1, unit: "each", category: "pantry" },
+    ] }, provenance: { kind: "sample" }, rightsStatus: "AI_generated", publishedAt: null,
+  };
+  const bowl: ContentItem = {
+    ...wrap, id: "bowl", title: "Potato Bowl", meta: { ...meta, ingredients: [
+      { name: "potato", quantity: 1, unit: "each", category: "vegetables" },
+      { name: "rice", quantity: 1, unit: "cup", category: "pantry" },
+    ] },
+  };
+  const matches = matchPantryRecipes([bowl, wrap], ["chickpea", "tortilla"]);
+  assert.deepEqual(matches.map(({ item }) => item.id), ["wrap"]);
+  assert.deepEqual(matches[0]?.has, ["chickpeas", "tortilla"]);
+  assert.deepEqual(matches[0]?.missing, []);
+  assert.deepEqual(matchPantryRecipes([bowl, wrap], ["rice"])[0]?.missing, ["potato"]);
 });

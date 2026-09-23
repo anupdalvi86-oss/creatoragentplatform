@@ -47,7 +47,7 @@ npm run deploy             # only after deployment setup and review
 ## What works now
 
 - Runtime creator config and tenant-scoped content, with a second seeded tenant to exercise isolation.
-- Mobile-first cooking PWA, installable shell, content search, source pages, Can I Make This, substitutions, grounded source cards, structured ingredient parsing from explicit public descriptions, scaled ingredient display, clearable adult kitchen preferences, and per-serving recipe nutrition estimates with an unsaved ingredient calculator.
+- Mobile-first cooking PWA, installable shell, content search, source pages, Can I Make This, pantry-to-recipe matching, substitutions, grounded source cards, structured ingredient parsing from explicit public descriptions, scaled ingredient display, clearable adult kitchen preferences, and per-serving recipe nutrition estimates with an unsaved ingredient calculator.
 - Optional OpenAI Chat Completions adapter; mock fallback; explicit model pricing required before paid calls. Source metadata is sent with `store: false`.
 - Creator-grounded dinner and lunchbox plan previews, meal replacement, deterministic grocery aggregation, saved plans/lists and ideas, checkbox persistence, server-side free/premium gates and signed adult sessions.
 - Browser speech recognition where supported, two-use voice trial, server-side allowance and text fallback.
