@@ -86,6 +86,15 @@ const agentToolSchema = z.enum([
 ]);
 const recipeMetaSchema = z.object({
   minutes: z.number().int().min(1).max(240),
+  prepMinutes: z.number().int().min(1).max(240).optional(),
+  difficulty: z.enum(["Easy", "Medium", "Hard"]).optional(),
+  nutrition: z.object({
+    calories: z.number().min(0).max(5000),
+    protein: z.number().min(0).max(500),
+    carbs: z.number().min(0).max(1000),
+    fat: z.number().min(0).max(500),
+  }).optional(),
+  nutritionSource: z.string().max(160).optional(),
   equipment: z.array(z.string().min(1).max(40)).max(10),
   diet: z.array(z.string().min(1).max(40)).max(10),
   servings: z.number().int().min(1).max(50),

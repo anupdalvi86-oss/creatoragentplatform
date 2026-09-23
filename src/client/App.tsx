@@ -4,13 +4,16 @@ import type {
   Creator,
   GroundedAnswer,
   Ingredient,
+  RecipeMeta,
 } from "../shared/types";
+import { estimateNutrition, parseNutritionIngredients, recipeDifficulty } from "./nutrition";
 
 type Screen =
   | "home"
   | "can-make"
   | "plan"
   | "grocery"
+  | "nutrition"
   | "source"
   | "preferences"
   | "saved";
@@ -234,6 +237,7 @@ function RecipeCard({
   const detailLabel = item.meta.minutes
     ? `${item.meta.minutes} ${language === "hi" ? "मिनट" : "MIN"}`
     : language === "hi" ? "वीडियो" : "VIDEO";
+  const nutrition = estimateNutrition(item.meta);
   const mark =
     item.meta.ingredients[0]?.name === "paneer"
       ? "◒"
@@ -260,6 +264,13 @@ function RecipeCard({
         </span>
         <strong title={item.title}>{item.title}</strong>
         <small>{why || item.description}</small>
+        <span className="recipe-nutrition-strip">
+          {nutrition.complete
+            ? (language === "hi"
+                ? `प्रति सर्विंग · ${nutrition.basis === "estimated" ? "≈ " : ""}${nutrition.perServing.calories} kcal · प्रोटीन ${nutrition.perServing.protein} g · कार्ब्स ${nutrition.perServing.carbs} g · वसा ${nutrition.perServing.fat} g`
+                : `Per serving · ${nutrition.basis === "estimated" ? "≈ " : ""}${nutrition.perServing.calories} kcal · ${nutrition.perServing.protein} g protein · ${nutrition.perServing.carbs} g carbs · ${nutrition.perServing.fat} g fat`)
+            : (language === "hi" ? "पोषण अनुमान उपलब्ध नहीं" : "Nutrition estimate unavailable")}
+        </span>
         <span className="tag-row">
           {item.tags.slice(0, 2).map((tag) => (
             <em key={tag}>{tag}</em>
@@ -270,10 +281,76 @@ function RecipeCard({
     </button>
   );
 }
+
+function RecipeOverview({
+  meta,
+  language,
+}: {
+  meta: RecipeMeta;
+  language: Language;
+}) {
+  const nutrition = estimateNutrition(meta);
+  const difficulty = recipeDifficulty(meta);
+  const hindi = language === "hi";
+  const facts = [
+    { label: hindi ? "कठिनाई" : "Difficulty", value: hindi ? ({ Easy: "आसान", Medium: "मध्यम", Hard: "कठिन" }[difficulty]) : difficulty },
+    { label: hindi ? "तैयारी का समय" : "Prep. time", value: meta.prepMinutes ?? meta.minutes ? `${meta.prepMinutes ?? meta.minutes} ${hindi ? "मिनट" : "min"}` : "—" },
+    { label: hindi ? "कैलोरी" : "Calories", value: nutrition.complete ? `${nutrition.perServing.calories} kcal` : "—" },
+  ];
+  const macros = [
+    { label: hindi ? "प्रोटीन" : "Protein", value: nutrition.complete ? `${nutrition.perServing.protein} g` : "—", icon: "◉" },
+    { label: hindi ? "कार्ब्स" : "Carbs", value: nutrition.complete ? `${nutrition.perServing.carbs} g` : "—", icon: "◌" },
+    { label: hindi ? "फैट" : "Fat", value: nutrition.complete ? `${nutrition.perServing.fat} g` : "—", icon: "◒" },
+  ];
+  return (
+    <section className="recipe-overview" aria-label={hindi ? "पोषण और रेसिपी सारांश" : "Nutrition and recipe overview"}>
+      <div className="recipe-overview-top">
+        {facts.map((fact) => (
+          <div className="overview-fact" key={fact.label}>
+            <span>{fact.label}</span>
+            <strong>{fact.value}</strong>
+          </div>
+        ))}
+        <div className="overview-fact">
+          <span>{hindi ? "सर्विंग" : "Servings"}</span>
+          <strong>{meta.servings}</strong>
+        </div>
+      </div>
+      <div className="recipe-macros">
+        {macros.map((macro) => (
+          <div className="macro-card" key={macro.label}>
+            <span className="macro-icon" aria-hidden="true">{macro.icon}</span>
+            <span>{macro.label}</span>
+            <strong>{macro.value}</strong>
+          </div>
+        ))}
+      </div>
+      <p className="nutrition-note">
+        {nutrition.basis === "provided"
+          ? (meta.nutritionSource
+              ? `${hindi ? "प्रति सर्विंग पोषण · स्रोत:" : "Nutrition per serving · source:"} ${meta.nutritionSource}`
+              : (hindi ? "दिए गए पोषण मान प्रति सर्विंग हैं।" : "Nutrition values supplied per serving."))
+          : nutrition.complete
+            ? (hindi
+                ? `प्रति सर्विंग अनुमान · ${meta.servings} सर्विंग · सामग्री औसत पर आधारित`
+                : `Estimated per serving · ${meta.servings} servings · based on generic ingredient averages`)
+            : (hindi
+                ? `पोषण अनुमान के लिए मात्रा या सामग्री पहचान नहीं सके${nutrition.unestimated.length ? `: ${nutrition.unestimated.join(", ")}` : ""}`
+                : `Nutrition estimate needs known amounts for every ingredient${nutrition.unestimated.length ? `: ${nutrition.unestimated.join(", ")}` : "."}`)}
+      </p>
+    </section>
+  );
+}
+
 export default function App() {
   const [creator, setCreator] = useState<Creator | null>(null);
   const [content, setContent] = useState<ContentItem[]>([]);
   const [screen, setScreen] = useState<Screen>("home");
+  const [nutritionRecipeId, setNutritionRecipeId] = useState("");
+  const [nutritionName, setNutritionName] = useState("");
+  const [nutritionServings, setNutritionServings] = useState(2);
+  const [nutritionIngredientText, setNutritionIngredientText] = useState("");
+  const [customNutritionMeta, setCustomNutritionMeta] = useState<RecipeMeta | null>(null);
   const [selected, setSelected] = useState<ContentItem | null>(null);
   const [query, setQuery] = useState("");
   const [goal, setGoal] = useState("");
@@ -909,6 +986,9 @@ export default function App() {
   const labels = language === "hi"
     ? {
         favourites: "पसंदीदा",
+        nutrition: "पोषण तथ्य",
+        nutritionDescription: "रेसिपी में कैलोरी और मैक्रो देखें",
+        chooseRecipe: "रेसिपी चुनें",
         myKitchen: "मेरी रसोई",
         myPlan: "मेरी योजना",
         useWhat: "मेरे पास जो है",
@@ -983,6 +1063,9 @@ export default function App() {
       }
     : {
         favourites: "Favourites",
+        nutrition: "Nutrition",
+        nutritionDescription: "View calories and macros for a recipe",
+        chooseRecipe: "Choose a recipe",
         myKitchen: "My kitchen",
         myPlan: "My plan",
         useWhat: "Use what I have",
@@ -1058,6 +1141,21 @@ export default function App() {
   function changeLanguage(next: Language) {
     setLanguage(next);
     localStorage.setItem(`cap-language-${slug}`, next);
+  }
+  function generateNutritionPreview() {
+    const parsed = parseNutritionIngredients(nutritionIngredientText);
+    if (!parsed.length) {
+      setError(language === "hi" ? "पहले सामग्री की सूची डालें।" : "Enter at least one ingredient line first.");
+      return;
+    }
+    setCustomNutritionMeta({
+      minutes: 20,
+      prepMinutes: 20,
+      equipment: [],
+      diet: [],
+      servings: Math.max(1, Math.min(50, nutritionServings)),
+      ingredients: parsed,
+    });
   }
   if (!creator && !error)
     return <main className="loading">Preparing the kitchen…</main>;
@@ -1183,6 +1281,11 @@ export default function App() {
               <span>♡</span>
               <strong>{labels.favouriteIdeas}</strong>
               <small>{language === "hi" ? "अपने पसंदीदा व्यंजन देखें" : "Return to your favourites"}</small>
+            </button>
+            <button onClick={() => navigate("nutrition")}>
+              <span>◒</span>
+              <strong>{labels.nutrition}</strong>
+              <small>{labels.nutritionDescription}</small>
             </button>
           </section>
           <section className="content-section">
@@ -1416,6 +1519,76 @@ export default function App() {
               )}
             </section>
           )}
+        </main>
+      )}
+      {screen === "nutrition" && (
+        <main className="inner nutrition-page">
+          <button className="back" onClick={() => navigate("home")}>
+            {labels.backHome}
+          </button>
+          <div className="page-title">
+            <p className="eyebrow">{labels.nutrition}</p>
+            <h1>{language === "hi" ? "अपनी रेसिपी जानें।" : "Know what’s on your plate."}</h1>
+            <p>{language === "hi" ? "कैटलॉग से रेसिपी चुनें। पोषण मान सूचीबद्ध सामग्री और सर्विंग के आधार पर अनुमान हैं।" : "Choose a recipe from the catalog. Nutrition values are estimates based on listed ingredients and servings."}</p>
+          </div>
+          {catalogRecipes.length ? (
+            <>
+              <label className="nutrition-recipe-picker">
+                {labels.chooseRecipe}
+                <select
+                  value={nutritionRecipeId || catalogRecipes[0]!.id}
+                  onChange={(event) => setNutritionRecipeId(event.target.value)}
+                >
+                  {catalogRecipes.map((recipe) => (
+                    <option key={recipe.id} value={recipe.id}>{recipe.title}</option>
+                  ))}
+                </select>
+              </label>
+              {(() => {
+                const recipe = catalogRecipes.find((item) => item.id === nutritionRecipeId) || catalogRecipes[0]!;
+                return (
+                  <section className="nutrition-result">
+                    <h2>{recipe.title}</h2>
+                    <RecipeOverview meta={recipe.meta} language={language} />
+                    <button className="secondary" onClick={() => open(recipe)}>
+                      {language === "hi" ? "पूरी रेसिपी खोलें" : "Open recipe"} →
+                    </button>
+                  </section>
+                );
+              })()}
+            </>
+          ) : (
+            <div className="creator-empty" role="status">
+              <strong>{language === "hi" ? "अभी कोई सामग्री वाली रेसिपी नहीं है।" : "No recipes with ingredient lists yet."}</strong>
+              <p>{language === "hi" ? "पोषण अनुमान देखने के लिए सामग्री वाली रेसिपी जोड़ें।" : "Add a recipe with ingredient quantities to see a nutrition estimate."}</p>
+            </div>
+          )}
+          <section className="nutrition-calculator">
+            <p className="eyebrow">{language === "hi" ? "अपना अनुमान बनाएं" : "MAKE A QUICK ESTIMATE"}</p>
+            <h2>{language === "hi" ? "सामग्री डालें" : "Estimate a recipe"}</h2>
+            <p className="nutrition-intro">{language === "hi" ? "सामग्री की मात्रा प्रति पंक्ति लिखें। यह केवल एक असहेजा हुआ अनुमान बनाएगा।" : "Enter ingredient amounts one per line. This creates an unsaved estimate only."}</p>
+            <label>
+              {language === "hi" ? "रेसिपी का नाम" : "Recipe name"}
+              <input value={nutritionName} onChange={(event) => setNutritionName(event.target.value)} placeholder={language === "hi" ? "झींगा टैको" : "Shrimp tacos"} />
+            </label>
+            <label>
+              {language === "hi" ? "सर्विंग" : "Servings"}
+              <input type="number" min={1} max={50} value={nutritionServings} onChange={(event) => setNutritionServings(Number(event.target.value) || 1)} />
+            </label>
+            <label>
+              {language === "hi" ? "सामग्री, हर पंक्ति में एक" : "Ingredients, one per line"}
+              <textarea rows={8} value={nutritionIngredientText} onChange={(event) => { setNutritionIngredientText(event.target.value); setCustomNutritionMeta(null); }} placeholder={"200 g shrimp\n4 corn tortillas\n1/2 avocado\n1 lime\n1 tbsp olive oil"} />
+            </label>
+            <button className="primary" type="button" onClick={generateNutritionPreview}>
+              {language === "hi" ? "पोषण अनुमान बनाएं" : "Generate nutrition estimate"} <span>→</span>
+            </button>
+            {customNutritionMeta && (
+              <div className="nutrition-custom-preview" aria-live="polite">
+                <h3>{nutritionName.trim() || (language === "hi" ? "रेसिपी अनुमान" : "Recipe estimate")}</h3>
+                <RecipeOverview meta={customNutritionMeta} language={language} />
+              </div>
+            )}
+          </section>
         </main>
       )}
       {screen === "plan" && (
@@ -1850,6 +2023,7 @@ export default function App() {
                   : labels.noSpecialEquipment}
               </span>
             </div>
+            <RecipeOverview meta={selected.meta} language={language} />
             <button
               className="secondary save-source"
               disabled={busy}

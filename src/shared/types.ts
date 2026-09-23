@@ -6,6 +6,10 @@ export type Ingredient = {
 };
 export type RecipeMeta = {
   minutes: number;
+  prepMinutes?: number;
+  difficulty?: "Easy" | "Medium" | "Hard";
+  nutrition?: { calories: number; protein: number; carbs: number; fat: number };
+  nutritionSource?: string;
   equipment: string[];
   diet: string[];
   servings: number;
