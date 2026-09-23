@@ -71,3 +71,16 @@ test("pantry matches rank recipes by owned ingredients and report missing ingred
   assert.deepEqual(matches[0]?.missing, []);
   assert.deepEqual(matchPantryRecipes([bowl, wrap], ["rice"])[0]?.missing, ["potato"]);
 });
+
+test("pantry matches source descriptions and ingredient hints when quantities are unavailable", () => {
+  const pyazPakoda: ContentItem = {
+    id: "pyaz-pakoda", creatorId: "creator", title: "Aloo Bhajiya", description: "Crispy pyaz pakoda for monsoon.",
+    sourceUrl: "/pyaz-pakoda", thumbnailUrl: null, tags: [],
+    meta: { ...meta, ingredients: [], ingredientHints: ["potato", "besan"] },
+    provenance: { kind: "creator" }, rightsStatus: "creator_owned", publishedAt: null,
+  };
+  const matches = matchPantryRecipes([pyazPakoda], ["onion"]);
+  assert.deepEqual(matches.map(({ item }) => item.id), ["pyaz-pakoda"]);
+  assert.deepEqual(matches[0]?.has, ["onion"]);
+  assert.deepEqual(matches[0]?.missing, []);
+});

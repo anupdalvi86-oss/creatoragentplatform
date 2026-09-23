@@ -629,19 +629,27 @@ export default function App() {
     () => content.filter((item) => item.meta.ingredients.length > 0),
     [content],
   );
+  const pantryRecipes = useMemo(
+    () => content.filter((item) => item.meta.ingredients.length > 0 || (item.meta.ingredientHints?.length ?? 0) > 0 || Boolean(item.description.trim())),
+    [content],
+  );
   const availablePantryIngredients = useMemo(() => {
     const ingredients = new Map<string, string>();
-    for (const recipe of catalogRecipes) {
-      for (const ingredient of recipe.meta.ingredients) {
-        const key = ingredient.name.toLowerCase().trim();
-        if (key && !ingredients.has(key)) ingredients.set(key, ingredient.name);
+    for (const recipe of pantryRecipes) {
+      const names = [
+        ...recipe.meta.ingredients.map((ingredient) => ingredient.name),
+        ...(recipe.meta.ingredientHints || []),
+      ];
+      for (const name of names) {
+        const key = name.toLowerCase().trim();
+        if (key && !ingredients.has(key)) ingredients.set(key, name);
       }
     }
     return [...ingredients.values()].sort((left, right) => left.localeCompare(right));
-  }, [catalogRecipes]);
+  }, [pantryRecipes]);
   const pantryMatches = useMemo(
-    () => matchPantryRecipes(catalogRecipes, pantryIngredients),
-    [catalogRecipes, pantryIngredients],
+    () => matchPantryRecipes(pantryRecipes, pantryIngredients),
+    [pantryRecipes, pantryIngredients],
   );
   useEffect(() => {
     if (!query.trim() || !creator) return;

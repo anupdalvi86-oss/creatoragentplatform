@@ -184,28 +184,105 @@ export type PantryRecipeMatch = {
 };
 
 function pantryKey(value: string): string {
-  return value.toLowerCase().trim().replace(/\s+/g, " ").replace(/s$/, "");
+  const normalized = value
+    .normalize("NFKD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .trim()
+    .replace(/\([^)]*\)/g, " ")
+    .replace(/[^\p{L}\p{N}]+/gu, " ")
+    .replace(/\s+/g, " ")
+    .replace(/s$/, "");
+  const aliases: Record<string, string> = {
+    pyaz: "onion",
+    pyaaz: "onion",
+    piaz: "onion",
+    kanda: "onion",
+    tamatar: "tomato",
+    aloo: "potato",
+    alu: "potato",
+    baingan: "eggplant",
+    brinjal: "eggplant",
+    bhindi: "okra",
+    "lady finger": "okra",
+    lauki: "bottle gourd",
+    ghiya: "bottle gourd",
+    dudhi: "bottle gourd",
+    jeera: "cumin",
+    dhania: "coriander",
+    haldi: "turmeric",
+    adrak: "ginger",
+    lehsun: "garlic",
+    atta: "wheat flour",
+    suji: "semolina",
+    rava: "semolina",
+    chawal: "rice",
+    chole: "chickpea",
+    chana: "chickpea",
+    dal: "lentil",
+    daal: "lentil",
+    dahi: "yogurt",
+    curd: "yogurt",
+    capsicum: "bell pepper",
+  };
+  return aliases[normalized] || normalized;
+}
+
+function sourceMentionsIngredient(item: ContentItem, ingredient: string): boolean {
+  const canonical = pantryKey(ingredient);
+  const aliases: Record<string, string[]> = {
+    onion: ["onion", "onions", "pyaz", "pyaaz", "piaz", "kanda", "kande"],
+    tomato: ["tomato", "tomatoes", "tamatar"],
+    potato: ["potato", "potatoes", "aloo", "alu"],
+    eggplant: ["eggplant", "aubergine", "brinjal", "baingan"],
+    okra: ["okra", "bhindi", "lady finger", "ladyfinger"],
+    "bottle gourd": ["bottle gourd", "lauki", "ghiya", "dudhi"],
+    cumin: ["cumin", "jeera"],
+    coriander: ["coriander", "dhania"],
+    turmeric: ["turmeric", "haldi"],
+    ginger: ["ginger", "adrak"],
+    garlic: ["garlic", "lehsun"],
+    "wheat flour": ["wheat flour", "atta"],
+    semolina: ["semolina", "suji", "rava"],
+    rice: ["rice", "chawal"],
+    chickpea: ["chickpea", "chickpeas", "chana", "chole"],
+    lentil: ["lentil", "lentils", "dal", "daal"],
+    yogurt: ["yogurt", "yoghurt", "curd", "dahi"],
+    "bell pepper": ["bell pepper", "bell peppers", "capsicum"],
+  };
+  const terms = aliases[canonical] || [ingredient];
+  const sourceText = `${item.title} ${item.description}`;
+  return terms.some((term) => {
+    const escaped = term.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    return new RegExp(`(^|[^\\p{L}\\p{N}])${escaped}([^\\p{L}\\p{N}]|$)`, "iu").test(sourceText);
+  });
 }
 
 export function matchPantryRecipes(
   recipes: ContentItem[],
   selectedIngredients: string[],
 ): PantryRecipeMatch[] {
-  const selected = new Set(selectedIngredients.map(pantryKey));
   return recipes
-    .filter((item) => item.meta.ingredients.length > 0)
     .map((item) => {
-      const has = item.meta.ingredients
-        .map((ingredient) => ingredient.name)
-        .filter((name) => selected.has(pantryKey(name)));
+      const recipeIngredients = item.meta.ingredients.map((ingredient) => ingredient.name);
+      const ingredientHints = item.meta.ingredientHints || [];
+      const knownIngredients = [...recipeIngredients, ...ingredientHints];
+      const selected = new Set(selectedIngredients.map(pantryKey));
+      const has = knownIngredients.filter((name) => selected.has(pantryKey(name)));
+      for (const ingredient of selectedIngredients) {
+        if (
+          !has.some((name) => pantryKey(name) === pantryKey(ingredient)) &&
+          sourceMentionsIngredient(item, ingredient)
+        ) has.push(ingredient);
+      }
       const missing = item.meta.ingredients
         .map((ingredient) => ingredient.name)
         .filter((name) => !selected.has(pantryKey(name)));
-      return { item, has, missing };
+      return { item, has: [...new Set(has)], missing };
     })
-    .filter((match) => selected.size === 0 || match.has.length > 0)
+    .filter((match) => selectedIngredients.length === 0 || match.has.length > 0)
     .sort((left, right) => {
-      if (!selected.size) return left.item.title.localeCompare(right.item.title);
+      if (!selectedIngredients.length) return left.item.title.localeCompare(right.item.title);
       return right.has.length - left.has.length || left.missing.length - right.missing.length || left.item.title.localeCompare(right.item.title);
     });
 }
