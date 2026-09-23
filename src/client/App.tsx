@@ -70,10 +70,20 @@ type SpeechRecognitionLike = {
 };
 
 const creatorRoute = location.pathname.match(/^\/creator\/([a-z0-9-]+)$/i)?.[1];
-const slug =
-  creatorRoute ||
-  new URLSearchParams(location.search).get("creator") ||
-  "anyone-can-cook-demo";
+const requestedCreatorSlug = new URLSearchParams(location.search).get("creator");
+const isStandaloneApp = window.matchMedia("(display-mode: standalone)").matches ||
+  (navigator as Navigator & { standalone?: boolean }).standalone === true;
+let lastCreatorSlug = "";
+try {
+  lastCreatorSlug = localStorage.getItem("cap-last-creator") || "";
+} catch {
+  // Storage may be unavailable in restricted browser contexts.
+}
+const slug = creatorRoute || (
+  isStandaloneApp && (!requestedCreatorSlug || requestedCreatorSlug === "anyone-can-cook-demo") && lastCreatorSlug
+    ? lastCreatorSlug
+    : requestedCreatorSlug || "anyone-can-cook-demo"
+);
 const base = `/api/${encodeURIComponent(slug)}`;
 const hindiIngredientNames: Record<string, string> = {
   salt: "नमक",
@@ -498,10 +508,18 @@ export default function App() {
       .then(([c, items]) => {
         setCreator(c);
         setContent(items.items);
+        try {
+          localStorage.setItem("cap-last-creator", c.slug);
+        } catch {
+          // Keep the app usable if storage is disabled.
+        }
         document.title = creatorDisplayName(c.name);
         document
           .querySelector('meta[name="description"]')
           ?.setAttribute("content", c.brand.disclaimer || "Creator kitchen workspace");
+        document
+          .querySelector('meta[name="theme-color"]')
+          ?.setAttribute("content", c.brand.accent);
         api<{
           familySize?: number;
           diet?: string[];
@@ -2357,7 +2375,7 @@ export default function App() {
           className={screen === "can-make" ? "active" : ""}
           onClick={() => navigate("can-make")}
         >
-          ◉<span>Can I make?</span>
+          ◉<span>{language === "hi" ? "मेरी पेंट्री" : "Pantry"}</span>
         </button>
         <button
           className={screen === "plan" ? "active" : ""}
