@@ -113,7 +113,100 @@ const hindiIngredientNames: Record<string, string> = {
   water: "पानी",
   cucumber: "खीरा",
   tortilla: "रोटी",
+  spinach: "पालक",
+  cauliflower: "फूलगोभी",
+  okra: "भिंडी",
+  eggplant: "बैंगन",
+  cabbage: "पत्ता गोभी",
+  carrot: "गाजर",
+  peas: "मटर",
+  "green beans": "हरी फलियां",
+  "green chili": "हरी मिर्च",
+  "curry leaves": "करी पत्ता",
+  cilantro: "हरा धनिया",
+  mint: "पुदीना",
+  "basmati rice": "बासमती चावल",
+  poha: "पोहा",
+  "flattened rice": "चिवड़ा",
+  oats: "ओट्स",
+  millet: "बाजरा",
+  "ragi flour": "रागी का आटा",
+  besan: "बेसन",
+  "toor dal": "तूर दाल",
+  "moong dal": "मूंग दाल",
+  "chana dal": "चना दाल",
+  "urad dal": "उड़द दाल",
+  "kidney beans": "राजमा",
+  peanuts: "मूंगफली",
+  eggs: "अंडे",
+  egg: "अंडा",
+  chicken: "चिकन",
+  shrimp: "झींगा",
+  turmeric: "हल्दी",
+  "garam masala": "गरम मसाला",
+  "chili powder": "लाल मिर्च पाउडर",
+  "mustard seeds": "राई",
+  clove: "लौंग",
+  cloves: "लौंग",
+  "ginger garlic paste": "अदरक-लहसुन पेस्ट",
+  "mustard oil": "सरसों का तेल",
+  tamarind: "इमली",
+  jaggery: "गुड़",
+  lemon: "नींबू",
+  lime: "नींबू",
+  pumpkin: "कद्दू",
+  "bottle gourd": "लौकी",
+  "bitter gourd": "करेला",
+  zucchini: "ज़ुकीनी",
+  corn: "मक्का",
+  pasta: "पास्ता",
+  paprika: "पपरिका",
+  "white beans": "सफेद बीन्स",
 };
+const PANTRY_INGREDIENT_GROUPS = [
+  {
+    id: "vegetables",
+    icon: "🥬",
+    title: "Vegetables & greens",
+    titleHi: "सब्ज़ियां और साग",
+    ingredients: ["onion", "tomato", "potato", "spinach", "cauliflower", "okra", "eggplant", "cabbage", "carrot", "peas", "green beans", "bell pepper", "cucumber", "pumpkin", "bottle gourd", "bitter gourd", "zucchini", "green chili", "corn"],
+  },
+  {
+    id: "grains",
+    icon: "🌾",
+    title: "Grains & breads",
+    titleHi: "अनाज और रोटियां",
+    ingredients: ["rice", "basmati rice", "wheat flour", "semolina", "poha", "flattened rice", "oats", "millet", "ragi flour", "besan", "roti", "tortilla", "pasta"],
+  },
+  {
+    id: "pulses",
+    icon: "🫘",
+    title: "Dals, beans & nuts",
+    titleHi: "दालें, बीन्स और मेवे",
+    ingredients: ["lentils", "toor dal", "moong dal", "chana dal", "urad dal", "chickpeas", "kidney beans", "white beans", "black beans", "peanuts", "cashew", "almonds"],
+  },
+  {
+    id: "dairy",
+    icon: "🥛",
+    title: "Dairy & protein",
+    titleHi: "डेयरी और प्रोटीन",
+    ingredients: ["paneer", "yogurt", "curd", "milk", "cream", "ghee", "butter", "eggs", "egg", "chicken", "shrimp"],
+  },
+  {
+    id: "spices",
+    icon: "🌶️",
+    title: "Spices & herbs",
+    titleHi: "मसाले और हर्ब्स",
+    ingredients: ["turmeric", "cumin", "coriander", "garam masala", "chili powder", "mustard seeds", "cardamom", "cinnamon", "clove", "ginger", "garlic", "ginger garlic paste", "curry leaves", "cilantro", "mint", "paprika"],
+  },
+  {
+    id: "staples",
+    icon: "🫙",
+    title: "Oils & pantry staples",
+    titleHi: "तेल और रसोई की ज़रूरी चीज़ें",
+    ingredients: ["oil", "mustard oil", "olive oil", "coconut", "tamarind", "jaggery", "salt", "sugar", "lemon", "lime", "water"],
+  },
+];
 const hindiUnitNames: Record<string, string> = {
   cup: "कप",
   cups: "कप",
@@ -356,7 +449,7 @@ export default function App() {
   const [selected, setSelected] = useState<ContentItem | null>(null);
   const [query, setQuery] = useState("");
   const [goal, setGoal] = useState("");
-  const [ingredients, setIngredients] = useState("");
+  const [ingredients] = useState("");
   const [equipment, setEquipment] = useState<string[]>([]);
   const [diet, setDiet] = useState<string[]>([]);
   const [familySize, setFamilySize] = useState(2);
@@ -368,9 +461,6 @@ export default function App() {
   const [mealType, setMealType] = useState<"dinner" | "lunch">("dinner");
   const [dislikedIngredients, setDislikedIngredients] = useState("");
   const [childAgeRanges, setChildAgeRanges] = useState("");
-  const [answer, setAnswer] = useState<
-    (GroundedAnswer & { gate?: { paywallContext: string } }) | null
-  >(null);
   const [plan, setPlan] = useState<Plan | null>(null);
   const [mealPlanEntries, setMealPlanEntries] = useState<MealPlanEntry[]>([]);
   const [mealSlot, setMealSlot] = useState<MealSlot>("dinner");
@@ -549,9 +639,6 @@ export default function App() {
     }
     return [...ingredients.values()].sort((left, right) => left.localeCompare(right));
   }, [catalogRecipes]);
-  const visiblePantryIngredients = availablePantryIngredients.filter((name) =>
-    name.toLowerCase().includes(pantrySearch.trim().toLowerCase()),
-  );
   const pantryMatches = useMemo(
     () => matchPantryRecipes(catalogRecipes, pantryIngredients),
     [catalogRecipes, pantryIngredients],
@@ -614,11 +701,8 @@ export default function App() {
     }
     setBusy(true);
     setError("");
-    setAnswer(null);
     try {
-      const result = await api<
-        GroundedAnswer & { gate?: { paywallContext: string } }
-      >("/can-make", "POST", {
+      await api<GroundedAnswer & { gate?: { paywallContext: string } }>("/can-make", "POST", {
         goal: goalText,
         ingredients,
         equipment,
@@ -626,7 +710,6 @@ export default function App() {
         familySize,
         maxMinutes,
       });
-      setAnswer(result);
     } catch (e) {
       setError((e as Error).message);
     } finally {
@@ -1177,12 +1260,35 @@ export default function App() {
     });
   }
   function addPantryIngredient() {
-    const value = pantrySearch.trim();
+    const value = canonicalIngredient(pantrySearch.trim(), language);
     if (!value) return;
     if (!pantryIngredients.some((ingredient) => ingredient.toLowerCase() === value.toLowerCase()))
       setPantryIngredients((current) => [...current, value]);
     setPantrySearch("");
   }
+  const knownPantryIngredients = new Set(
+    PANTRY_INGREDIENT_GROUPS.flatMap((group) => group.ingredients.map((name) => name.toLowerCase())),
+  );
+  const additionalPantryIngredients = [...new Set([
+    ...availablePantryIngredients,
+    ...pantryIngredients,
+  ].filter((name) => !knownPantryIngredients.has(name.toLowerCase())))];
+  const visiblePantryGroups = [
+    ...PANTRY_INGREDIENT_GROUPS.map((group) => ({
+      ...group,
+      ingredients: [...new Set([
+        ...group.ingredients,
+        ...availablePantryIngredients.filter((name) => group.ingredients.includes(name.toLowerCase())),
+      ])].filter((name) => `${name} ${localizedIngredient(name, language)}`.toLowerCase().includes(pantrySearch.trim().toLowerCase())),
+    })),
+    ...(additionalPantryIngredients.length ? [{
+      id: "other",
+      icon: "🧺",
+      title: "Other ingredients",
+      titleHi: "अन्य सामग्री",
+      ingredients: additionalPantryIngredients.filter((name) => `${name} ${localizedIngredient(name, language)}`.toLowerCase().includes(pantrySearch.trim().toLowerCase())),
+    }] : []),
+  ].filter((group) => group.ingredients.length > 0);
   if (!creator && !error)
     return <main className="loading">Preparing the kitchen…</main>;
   return (
@@ -1432,16 +1538,33 @@ export default function App() {
                 <button type="button" onClick={addPantryIngredient} aria-label={language === "hi" ? "सामग्री जोड़ें" : "Add ingredient"}>+</button>
               </div>
               <p className="pantry-help">{language === "hi" ? "नीचे से सामग्री चुनें या अपनी सामग्री जोड़ें।" : "Choose ingredients from the catalog, or add your own."}</p>
-              <div className="pantry-ingredient-list">
-                {visiblePantryIngredients.map((ingredient) => {
-                  const active = pantryIngredients.includes(ingredient);
+              <div className="pantry-ingredient-groups">
+                {visiblePantryGroups.map((group) => {
+                  const selectedCount = group.ingredients.filter((ingredient) => pantryIngredients.includes(ingredient)).length;
                   return (
-                    <button key={ingredient} type="button" className={active ? "active" : ""} aria-pressed={active} onClick={() => setPantryIngredients((current) => active ? current.filter((value) => value !== ingredient) : [...current, ingredient])}>
-                      {localizedIngredient(ingredient, language)}
-                    </button>
+                    <details className="pantry-ingredient-group" key={group.id} open={pantrySearch.trim() ? true : group.id === "vegetables"}>
+                      <summary>
+                        <span className="pantry-group-icon" aria-hidden="true">{group.icon}</span>
+                        <span className="pantry-group-label">
+                          <strong>{language === "hi" ? group.titleHi : group.title}</strong>
+                          <small>{selectedCount}/{group.ingredients.length} {language === "hi" ? "सामग्री" : "ingredients"}</small>
+                        </span>
+                        <span className="pantry-group-chevron" aria-hidden="true">⌄</span>
+                      </summary>
+                      <div className="pantry-ingredient-list">
+                        {group.ingredients.map((ingredient) => {
+                          const active = pantryIngredients.includes(ingredient);
+                          return (
+                            <button key={ingredient} type="button" className={active ? "active" : ""} aria-pressed={active} onClick={() => setPantryIngredients((current) => active ? current.filter((value) => value !== ingredient) : [...current, ingredient])}>
+                              {localizedIngredient(ingredient, language)}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </details>
                   );
                 })}
-                {!visiblePantryIngredients.length && pantrySearch.trim() && (
+                {!visiblePantryGroups.length && pantrySearch.trim() && (
                   <p className="pantry-no-ingredient">{language === "hi" ? "Enter या + दबाकर अपनी सामग्री जोड़ें।" : "Press Enter or + to add your ingredient."}</p>
                 )}
               </div>
@@ -1501,151 +1624,6 @@ export default function App() {
               )}
             </section>
           </div>
-          <details className="pantry-assistant">
-            <summary>{language === "hi" ? "कुकिंग सहायक से पूछें" : "Ask the cooking assistant"}</summary>
-          <div className="form-card">
-            <label>
-              {labels.cookingGoal}
-              <input
-                value={goal}
-                onChange={(e) => setGoal(e.target.value)}
-                placeholder="e.g. a quick vegetarian dinner"
-              />
-            </label>
-            <label>
-              {labels.ingredientsYouHave}
-              <textarea
-                value={ingredients}
-                onChange={(e) => setIngredients(e.target.value)}
-                placeholder="paneer, potatoes, rice…"
-                rows={3}
-              />
-            </label>
-            <div className="form-row">
-              <label>
-                {labels.familySize}
-                <input
-                  type="number"
-                  min="1"
-                  max="20"
-                  value={familySize}
-                  onChange={(e) => setFamilySize(Number(e.target.value))}
-                />
-              </label>
-              <label>
-                {labels.availableTime}
-                <input
-                  type="number"
-                  min="1"
-                  max="240"
-                  value={maxMinutes}
-                  onChange={(e) => setMaxMinutes(Number(e.target.value))}
-                />
-              </label>
-            </div>
-            <p className="field-label">{labels.kitchenNeeds}</p>
-            <div className="chips">
-              {["no oven", "no air fryer"].map((x) => (
-                <button
-                  key={x}
-                  className={equipment.includes(x) ? "active" : ""}
-                  onClick={() => toggle(x, equipment, setEquipment)}
-                >
-                  {x}
-                </button>
-              ))}
-              {["vegetarian", "high-protein"].map((x) => (
-                <button
-                  key={x}
-                  className={diet.includes(x) ? "active" : ""}
-                  onClick={() => toggle(x, diet, setDiet)}
-                >
-                  {x}
-                </button>
-              ))}
-            </div>
-            <button
-              className="primary full"
-              disabled={busy}
-              onClick={() => submitCanMake()}
-            >
-              {busy ? labels.checkingSources : labels.findWorks} <span>→</span>
-            </button>
-          </div>
-          {answer && (
-            <section className="result-section" aria-live="polite">
-              <div className="answer-card">
-                <p className="eyebrow">{answer.label}</p>
-                <h2>{labels.closestMatch}</h2>
-                <p>{answer.answer}</p>
-                {answer.warnings.map((warning) => (
-                  <small className="warning" key={warning}>
-                    {warning}
-                  </small>
-                ))}
-                {answer.gate && (
-                  <div className="gate-note">
-                    {answer.gate.paywallContext} You can keep searching the
-                    catalog for free.
-                  </div>
-                )}
-              </div>
-              {answer.matches.length ? (
-                <>
-                  <div className="section-head">
-                    <div>
-                      <p className="eyebrow">{labels.sourceCards}</p>
-                      <h2>{labels.exploreMatches}</h2>
-                    </div>
-                  </div>
-                  <div className="recipe-grid">
-                    {answer.matches.map((match) => (
-                      <div className="match-card" key={match.content.id}>
-                <RecipeCard
-                  item={match.content}
-                  why={match.why}
-                  language={language}
-                  onOpen={() => open(match.content)}
-                        />
-                        {(match.has.length > 0 || match.missing.length > 0) && (
-                          <div className="match-details">
-                            {match.has.length > 0 && (
-                              <p>
-                                <strong>{labels.youHave}</strong>{" "}
-                                {match.has
-                                  .map((ingredient) => localizedIngredient(ingredient, language))
-                                  .join(", ")}
-                              </p>
-                            )}
-                            {match.missing.length > 0 && (
-                              <p>
-                                <strong>{labels.stillNeeded}</strong>{" "}
-                                {match.missing
-                                  .map((ingredient) => localizedIngredient(ingredient, language))
-                                  .join(", ")}
-                              </p>
-                            )}
-                          </div>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                </>
-              ) : (
-                <div className="creator-empty" role="status">
-                  <strong>{labels.noCloseMatch}</strong>
-                  <p>
-                    We could not find a recipe using those exact ingredients.
-                    Try one fewer restriction or browse the full source catalog.
-                  </p>
-                  <button className="secondary" onClick={() => navigate("home")}>
-                    {labels.browseIdeas}
-                  </button>
-                </div>
-              )}
-            </section>
-          )}
-          </details>
         </main>
       )}
       {screen === "nutrition" && (
