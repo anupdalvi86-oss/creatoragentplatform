@@ -461,6 +461,7 @@ function RecipeOverview({
 
 export default function App() {
   const [creator, setCreator] = useState<Creator | null>(null);
+  const [analyticsReady, setAnalyticsReady] = useState(false);
   const [content, setContent] = useState<ContentItem[]>([]);
   const [screen, setScreen] = useState<Screen>("home");
   const [nutritionRecipeId, setNutritionRecipeId] = useState("");
@@ -546,9 +547,10 @@ export default function App() {
             }>("/saved");
             setSavedItems(saved.items);
             setSavedLimit(saved.limit);
-            return api("/event", "POST", { type: "page_view" });
+            return undefined;
           })
-          .catch(() => undefined);
+          .catch(() => undefined)
+          .finally(() => setAnalyticsReady(true));
         document.documentElement.style.setProperty("--accent", c.brand.accent);
         const savedPlan = localStorage.getItem(`cap-plan-${slug}`);
         if (savedPlan)
@@ -571,6 +573,38 @@ export default function App() {
       })
       .catch((e: Error) => setError(e.message));
   }, []);
+  useEffect(() => {
+    if (!analyticsReady) return;
+    const params = new URLSearchParams(location.search);
+    const campaign = {
+      source: params.get("utm_source") || undefined,
+      medium: params.get("utm_medium") || undefined,
+      name: params.get("utm_campaign") || undefined,
+      term: params.get("utm_term") || undefined,
+      content: params.get("utm_content") || undefined,
+    };
+    let referrerHost: string | undefined;
+    try {
+      if (document.referrer) {
+        const referrerUrl = new URL(document.referrer);
+        if (referrerUrl.hostname !== location.hostname)
+          referrerHost = referrerUrl.hostname;
+      }
+    } catch {
+      referrerHost = undefined;
+    }
+    const width = window.innerWidth;
+    const viewport = width < 640 ? "mobile" : width < 1024 ? "tablet" : "desktop";
+    void api("/event", "POST", {
+      type: "page_view",
+      pagePath: location.pathname,
+      screen,
+      referrerHost,
+      viewport,
+      language: navigator.language,
+      campaign: Object.values(campaign).some(Boolean) ? campaign : undefined,
+    }).catch(() => undefined);
+  }, [analyticsReady, screen]);
   useEffect(() => {
     const stored = localStorage.getItem(`cap-language-${slug}`);
     if (stored === "hi") setLanguage("hi");

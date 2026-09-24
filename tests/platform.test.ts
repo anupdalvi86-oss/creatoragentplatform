@@ -6,6 +6,24 @@ import type { Env } from '../src/server/db';
 import { discoverOpportunity, ManualImportProvider } from '../src/server/research';
 import { durationMinutes, isYouTubeChannelRef, parsePublicFeed } from '../src/server/youtube';
 import { getGateVariant } from '../src/server/experiments';
+import { classifyVisitor, pageViewMetadata } from '../src/server/analytics';
+
+test('visitor analytics stores coarse device and edge location without raw network identifiers', () => {
+  const headers = new Headers({
+    'user-agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 Version/17.0 Mobile/15E148 Safari/604.1',
+    'cf-ipcountry': 'SE',
+    'cf-region': 'Stockholm County',
+    'cf-ipcity': 'Stockholm',
+    'cf-connecting-ip': '203.0.113.17',
+  });
+  assert.deepEqual(classifyVisitor(headers), {
+    browser: 'Safari', os: 'iOS', device: 'mobile', country: 'SE', region: 'Stockholm County', city: 'Stockholm',
+  });
+  const metadata = pageViewMetadata(headers, { pagePath: '/creator/demo', screen: 'home' });
+  assert.equal(metadata.pagePath, '/creator/demo');
+  assert.equal(JSON.stringify(metadata).includes('203.0.113.17'), false);
+  assert.equal(JSON.stringify(metadata).includes(headers.get('user-agent')!), false);
+});
 
 test('substitution makes no creator claim without source evidence', async () => {
   const db = { prepare() { return { bind() { return { async all() { return { results: [] }; } }; } }; } } as unknown as D1Database;

@@ -22,7 +22,7 @@ These tables describe a cooking-agent configuration today; they do not contain a
 
 ## Commercial and operations
 
-`events` holds privacy-conscious product events. `affiliate_links` contains approved destination, campaign and placement; `affiliate_clicks` records click IDs. `campaigns` and `campaign_events` record sponsored exposure. `revenue_events` records source, gross, fees, refunds, direct costs, net, currency, status and external transaction ID. Clicks never imply revenue.
+`events` holds privacy-conscious product events. Creator PWA `page_view` events include the normalized PWA screen/path, allowlisted UTM attribution, referrer hostname, coarse browser/OS/device, viewport, language and Cloudflare country/region/city where supplied. The existing signed first-party creator session ID supports approximate unique-visitor counts; its cookie lasts one year. Raw IP addresses, raw user-agent strings, full referrer URLs and arbitrary query strings are not stored. The protected creator metrics response aggregates all-time and last-30-day views/visitors plus daily visits, traffic sources/campaigns, location, devices and pages. The admin portal itself is not instrumented as a consumer page. `affiliate_links` contains approved destination, campaign and placement; `affiliate_clicks` records click IDs. `campaigns` and `campaign_events` record sponsored exposure. `revenue_events` records source, gross, fees, refunds, direct costs, net, currency, status and external transaction ID. Clicks never imply revenue.
 
 ## Creator Scout
 

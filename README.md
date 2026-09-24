@@ -54,7 +54,8 @@ npm run deploy             # only after deployment setup and review
 - Protected admin API/UI for cooking creator setup, branding, agent tools/model policy, gates, content review and authorized metadata import, YouTube ingestion, Scout decisions, affiliate links and metrics.
 - Creator onboarding with a persisted Creator URL and a three-stage Scout flow: research creator, understand audience/content, and discover product opportunities. Manual observations are labelled inferred; official facts retain source, date and confidence.
 - Creator Scout with manual facts, official YouTube channel facts, optional Agent Reach bridge, provenance and reviewable ProductSpec. The Content tab can also import public YouTube video metadata directly from a channel URL when no API key is configured.
-- Safe affiliate redirects, click events, pending revenue records, AI usage and product metrics.
+- Creator PWA visitor analytics with approximate unique visitors, daily views, referrer/campaign attribution, coarse device/browser and location breakdowns, and per-screen visits. Raw IP addresses and raw user-agent strings are not stored. Protected admin metrics also retain existing engagement, AI usage and revenue summaries.
+- Safe affiliate redirects, click events, and pending revenue records.
 
 ## What is still external or limited
 

@@ -44,6 +44,7 @@ import {
 import { dispatchTask, runTaskById, advanceTaskHandoff } from "./agentTaskRunner";
 import { SPECIALIST_ROLE_KEYS } from "./specialistAgents";
 import { creatorOnboardingJobs } from "./creatorOnboarding";
+import { pageViewMetadata } from "./analytics";
 export { AgentTaskWorkflow } from "./agentWorkflow";
 
 const reply = (data: unknown, status = 200, cookie?: string) =>
@@ -389,6 +390,18 @@ async function tenantRoute(
         ]),
         contentId: z.string().max(100).optional(),
         resultCount: z.number().int().min(0).max(1000).optional(),
+        pagePath: z.string().max(200).optional(),
+        screen: z.enum(["home", "can-make", "plan", "grocery", "nutrition", "source", "preferences", "saved"]).optional(),
+        referrerHost: z.string().max(253).optional(),
+        viewport: z.enum(["mobile", "tablet", "desktop"]).optional(),
+        language: z.string().max(20).optional(),
+        campaign: z.object({
+          source: z.string().max(100).optional(),
+          medium: z.string().max(100).optional(),
+          name: z.string().max(100).optional(),
+          term: z.string().max(100).optional(),
+          content: z.string().max(100).optional(),
+        }).optional(),
       })
       .parse(await body(request));
     const session = await getSession(request, env, creator.id, slug);
@@ -399,18 +412,26 @@ async function tenantRoute(
       !(await getContent(env.DB, creator.id, input.contentId, env.APP_ENV !== "production"))
     )
       return fail("Content not found", 404);
+    const metadata = input.type === "page_view"
+      ? pageViewMetadata(request.headers, {
+          pagePath: (input.pagePath || `/creator/${slug}`).replace(/[^a-zA-Z0-9/_-]/g, "").slice(0, 200) || `/creator/${slug}`,
+          screen: input.screen || "home",
+          ...(input.referrerHost ? { referrerHost: input.referrerHost.toLowerCase() } : {}),
+          ...(input.viewport ? { viewport: input.viewport } : {}),
+          ...(input.language ? { language: input.language } : {}),
+          ...(input.campaign ? { campaign: input.campaign } : {}),
+        })
+      : {
+          ...(input.contentId ? { contentId: input.contentId } : {}),
+          ...(input.resultCount !== undefined ? { resultCount: input.resultCount } : {}),
+        };
     await recordEvent(
       env.DB,
       creator.id,
       input.type,
       undefined,
       session.userId,
-      {
-        ...(input.contentId ? { contentId: input.contentId } : {}),
-        ...(input.resultCount !== undefined
-          ? { resultCount: input.resultCount }
-          : {}),
-      },
+      metadata,
     );
     return reply({ ok: true }, 200, session.cookie);
   }
@@ -1991,7 +2012,7 @@ async function adminRoute(
   }
   if (request.method === "GET" && path[0] === "metrics" && path[1]) {
     const creatorId = path[1];
-    const [events, ai, revenue] = await env.DB.batch([
+    const [events, ai, revenue, visitorTotals, recentVisitors, dailyVisitors, sources, locations, devices, languages, pages] = await env.DB.batch([
       env.DB.prepare(
         "SELECT event_type,COUNT(*) count FROM events WHERE creator_id=? GROUP BY event_type",
       ).bind(creatorId),
@@ -2001,11 +2022,49 @@ async function adminRoute(
       env.DB.prepare(
         "SELECT source,currency,SUM(net_amount) net FROM revenue_events WHERE creator_id=? AND status IN ('confirmed','paid') GROUP BY source,currency",
       ).bind(creatorId),
+      env.DB.prepare(
+        "SELECT COUNT(*) views,COUNT(DISTINCT user_id) unique_visitors FROM events WHERE creator_id=? AND event_type='page_view'",
+      ).bind(creatorId),
+      env.DB.prepare(
+        "SELECT COUNT(*) views,COUNT(DISTINCT user_id) unique_visitors FROM events WHERE creator_id=? AND event_type='page_view' AND occurred_at>=datetime('now','-30 days')",
+      ).bind(creatorId),
+      env.DB.prepare(
+        "SELECT date(occurred_at) day,COUNT(*) views,COUNT(DISTINCT user_id) unique_visitors FROM events WHERE creator_id=? AND event_type='page_view' AND occurred_at>=datetime('now','-30 days') GROUP BY date(occurred_at) ORDER BY day",
+      ).bind(creatorId),
+      env.DB.prepare(
+        "SELECT COALESCE(NULLIF(json_extract(metadata_json,'$.campaign.source'),''),NULLIF(json_extract(metadata_json,'$.referrerHost'),''),'Direct') source,COALESCE(json_extract(metadata_json,'$.campaign.medium'),'') medium,COALESCE(json_extract(metadata_json,'$.campaign.name'),'') campaign,COUNT(*) views,COUNT(DISTINCT user_id) unique_visitors FROM events WHERE creator_id=? AND event_type='page_view' AND occurred_at>=datetime('now','-30 days') GROUP BY source,medium,campaign ORDER BY views DESC LIMIT 10",
+      ).bind(creatorId),
+      env.DB.prepare(
+        "SELECT CASE WHEN json_extract(metadata_json,'$.city') IS NOT NULL AND json_extract(metadata_json,'$.country') IS NOT NULL THEN json_extract(metadata_json,'$.city')||', '||json_extract(metadata_json,'$.country') WHEN json_extract(metadata_json,'$.city') IS NOT NULL THEN json_extract(metadata_json,'$.city') WHEN json_extract(metadata_json,'$.region') IS NOT NULL THEN json_extract(metadata_json,'$.region') WHEN json_extract(metadata_json,'$.country') IS NOT NULL THEN json_extract(metadata_json,'$.country') ELSE 'Unknown' END location,COUNT(*) views,COUNT(DISTINCT user_id) unique_visitors FROM events WHERE creator_id=? AND event_type='page_view' AND occurred_at>=datetime('now','-30 days') GROUP BY location ORDER BY views DESC LIMIT 10",
+      ).bind(creatorId),
+      env.DB.prepare(
+        "SELECT COALESCE(json_extract(metadata_json,'$.device'),'Unknown') device,COALESCE(json_extract(metadata_json,'$.viewport'),'Unknown') viewport,COALESCE(json_extract(metadata_json,'$.browser'),'Unknown') browser,COALESCE(json_extract(metadata_json,'$.os'),'Unknown') os,COUNT(*) views,COUNT(DISTINCT user_id) unique_visitors FROM events WHERE creator_id=? AND event_type='page_view' AND occurred_at>=datetime('now','-30 days') GROUP BY device,viewport,browser,os ORDER BY views DESC LIMIT 10",
+      ).bind(creatorId),
+      env.DB.prepare(
+        "SELECT COALESCE(json_extract(metadata_json,'$.language'),'Unknown') language,COUNT(*) views,COUNT(DISTINCT user_id) unique_visitors FROM events WHERE creator_id=? AND event_type='page_view' AND occurred_at>=datetime('now','-30 days') GROUP BY language ORDER BY views DESC LIMIT 10",
+      ).bind(creatorId),
+      env.DB.prepare(
+        "SELECT COALESCE(json_extract(metadata_json,'$.pagePath'),'/creator')||' · '||COALESCE(json_extract(metadata_json,'$.screen'),'home') page,COUNT(*) views,COUNT(DISTINCT user_id) unique_visitors FROM events WHERE creator_id=? AND event_type='page_view' AND occurred_at>=datetime('now','-30 days') GROUP BY page ORDER BY views DESC LIMIT 10",
+      ).bind(creatorId),
     ]);
+    const visitorTotal = visitorTotals?.results?.[0] as
+      | { views?: number; unique_visitors?: number }
+      | undefined;
     return reply({
       events: events?.results || [],
       ai: ai?.results || [],
       confirmedRevenue: revenue?.results || [],
+      visitors: {
+        totalViews: visitorTotal?.views || 0,
+        uniqueVisitors: visitorTotal?.unique_visitors || 0,
+        last30Days: recentVisitors?.results?.[0] || { views: 0, unique_visitors: 0 },
+        daily: dailyVisitors?.results || [],
+        sources: sources?.results || [],
+        locations: locations?.results || [],
+        devices: devices?.results || [],
+        languages: languages?.results || [],
+        pages: pages?.results || [],
+      },
     });
   }
   // Agent Task Management Routes

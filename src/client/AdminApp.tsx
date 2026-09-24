@@ -3,6 +3,17 @@ import type { Creator } from "../shared/types";
 
 type Metrics = {
   events: Array<{ event_type: string; count: number }>;
+  visitors: {
+    totalViews: number;
+    uniqueVisitors: number;
+    last30Days: { views: number; unique_visitors: number };
+    daily: Array<{ day: string; views: number; unique_visitors: number }>;
+    sources: Array<{ source: string; medium: string; campaign: string; views: number; unique_visitors: number }>;
+    locations: Array<{ location: string; views: number; unique_visitors: number }>;
+    devices: Array<{ device: string; viewport: string; browser: string; os: string; views: number; unique_visitors: number }>;
+    languages: Array<{ language: string; views: number; unique_visitors: number }>;
+    pages: Array<{ page: string; views: number; unique_visitors: number }>;
+  };
   ai: Array<{
     feature: string;
     cost: number;
@@ -1180,6 +1191,30 @@ export default function AdminApp() {
                     </section>
                   )}
                   <section>
+                    <h2>Creator page visitors</h2>
+                    <p><span>All-time page views</span><strong>{metrics?.visitors.totalViews ?? 0}</strong></p>
+                    <p><span>Unique visitors</span><strong>{metrics?.visitors.uniqueVisitors ?? 0}</strong></p>
+                    <p><span>Last 30 days</span><strong>{metrics?.visitors.last30Days.unique_visitors ?? 0} visitors · {metrics?.visitors.last30Days.views ?? 0} views</strong></p>
+                    <h3>Traffic sources · last 30 days</h3>
+                    {metrics?.visitors.sources.length ? metrics.visitors.sources.map((row) => (
+                      <p key={`${row.source}-${row.medium}-${row.campaign}`}><span>{row.source}{row.medium ? ` · ${row.medium}` : ""}{row.campaign ? ` · ${row.campaign}` : ""}</span><strong>{row.unique_visitors} visitors · {row.views} views</strong></p>
+                    )) : <p>No page visits recorded yet.</p>}
+                    <h3>Daily visits · last 30 days</h3>
+                    {metrics?.visitors.daily.map((row) => (
+                      <p key={row.day}><span>{row.day}</span><strong>{row.unique_visitors} visitors · {row.views} views</strong></p>
+                    ))}
+                    <h3>Locations and devices · last 30 days</h3>
+                    {[...(metrics?.visitors.locations || []).map((row) => ({ label: row.location, key: `location-${row.location}`, row })), ...(metrics?.visitors.devices || []).map((row) => ({ label: `${row.device} · ${row.viewport} · ${row.browser} · ${row.os}`, key: `device-${row.device}-${row.browser}-${row.os}`, row }))].map(({ label, key, row }) => (
+                      <p key={key}><span>{label}</span><strong>{row.unique_visitors} visitors · {row.views} views</strong></p>
+                    ))}
+                    <h3>Languages · last 30 days</h3>
+                    {metrics?.visitors.languages.map((row) => (
+                      <p key={row.language}><span>{row.language}</span><strong>{row.unique_visitors} visitors · {row.views} views</strong></p>
+                    ))}
+                    <h3>Most visited pages · last 30 days</h3>
+                    {metrics?.visitors.pages.map((row) => (
+                      <p key={row.page}><span>{row.page}</span><strong>{row.unique_visitors} visitors · {row.views} views</strong></p>
+                    ))}
                     <h2>Engagement</h2>
                     {metrics?.events.length ? (
                       metrics.events.map((event) => (
