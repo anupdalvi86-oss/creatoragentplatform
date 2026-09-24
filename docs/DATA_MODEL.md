@@ -10,7 +10,8 @@ All tenant-owned tables carry `creator_id`. IDs are opaque strings. D1 migration
 
 `agents` and `agent_tools` configure role, prompt version, enabled tools and budgets. `ai_requests` and `ai_usage` record task, policy, provider, model, latency, token counts, estimated cost and status.
 
-These tables describe a cooking-agent configuration today; they do not contain a generic task queue, run steps or transcript records. The planned specialist implementation should add **new additive migrations** for a role/task/run lifecycle rather than rewriting existing demo rows or treating all roles as active. Suggested contracts (final SQL must be reviewed): a task with `creator_id`, role, input reference, idempotency key, initiator, state and timestamps; append-only run/step outcomes with model/tool/cost/error metadata; review decision with reviewer and time; an authorized media/transcript source with external ID, rights basis, language, time offsets, version, processing/review state and checksum. Put large media outside D1; keep D1 pointers and validated metadata. Distinguish "rights asserted" from "rights verified"; never elevate source rights on an AI judgment alone.
+The original `agents` tables describe cooking configuration. Migrations `0003`–`0006` add separate creator-scoped specialist tasks, runs, approvals and handoffs. Transcript records are still not implemented. Put any future large media outside D1 and distinguish rights asserted from rights verified.
+
 
 ## People and access
 
@@ -30,6 +31,10 @@ These tables describe a cooking-agent configuration today; they do not contain a
 
 ## Ownership and deletion
 
-All public queries are scoped by resolved creator. User-owned records are additionally scoped by a server-issued signed session ID. Admin operations require explicit tenant scope and role. Deletion can cascade per creator after a separate audited admin operation; this MVP exposes no destructive tenant deletion endpoint.
+All public queries are scoped by resolved creator. User-owned records are additionally scoped by a server-issued signed session ID. Admin operations require explicit tenant scope and role. An owner-only admin route can delete a workspace and its tenant-scoped rows; it must also remove fitness records before deleting the creator.
 
 All new tasks, runs, transcripts and approval reads/writes must include `creator_id` predicates and the appropriate operator/user authority. Use uniqueness constraints for retries and source deduplication. Avoid storing provider keys, complete prompts, or unnecessary personal data in run records. See [catalog](AGENT_CATALOG.md) for the rollout and [handoff](HERMES_HANDOFF.md) for deployment separation.
+
+## Fitness (migration 0007)
+
+`fitness_creator_members`, `fitness_users`, `fitness_profiles` and `fitness_entitlements` separate creator and audience identity and access from cooking. `fitness_programs` and `fitness_program_exercises` store creator-authored schedules and catalog references with draft, pending review, approved and published states. `fitness_workouts`, `fitness_reminders`, `fitness_challenges`, `fitness_challenge_members` and `fitness_posts` support engagement and moderation. Every lookup and mutation includes `creator_id`; audience data also includes `user_id`. Optional body measurements exist only in the audience's profile JSON and are absent from creator review and aggregate responses. No checkout integration issues fitness entitlements automatically.

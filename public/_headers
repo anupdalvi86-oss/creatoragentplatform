@@ -3,7 +3,7 @@
   Referrer-Policy: strict-origin-when-cross-origin
   X-Frame-Options: DENY
   Permissions-Policy: geolocation=(), camera=(), payment=()
-  Content-Security-Policy: default-src 'self'; script-src 'self'; style-src 'self' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: https://*.ytimg.com; connect-src 'self'; object-src 'none'; base-uri 'self'; frame-ancestors 'none'
+  Content-Security-Policy: default-src 'self'; script-src 'self'; style-src 'self' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: https://*.ytimg.com https://pub-585d42eb1aa64a67aedf483ec328d3fe.r2.dev; media-src 'self' https://pub-585d42eb1aa64a67aedf483ec328d3fe.r2.dev; connect-src 'self'; object-src 'none'; base-uri 'self'; frame-ancestors 'none'
 
 /sw.js
   Cache-Control: no-cache, max-age=0, must-revalidate

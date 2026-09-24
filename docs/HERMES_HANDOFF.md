@@ -51,3 +51,7 @@ Do not apply a blanket draft-only restriction. Existing and new bounded customer
 
 For each implemented slice: use a feature branch, additive migration if needed, tests for success/failure/tenant isolation, and run npm run typecheck, npm test, npm run lint, npm run build. Build is a dry run. Summarize the change, tests, remaining limitations and next slice; continue safe work across milestones rather than stopping after the first role. Preserve unrelated files. Do not push/merge, run remote migrations, change secrets, publish content, change payment/commercial state or deploy to production without my explicit approval. Human approval is for those high-impact effects, not each routine response or code edit.
 ```
+
+## 2026-09-25 local fitness branch note
+
+A local `feat/fitness-pwa` branch adds a fitness creator/audience product to the same Worker. The fitness Build PWA path requires administrator confirmation when public channel classification is ambiguous. Creator program writes require Cloudflare Access membership; audience data and sessions use separate fitness tables and cookies. Exercise metadata is bundled from the named MIT catalog. On 2026-09-25, the owner confirmed use of the catalog's source-hosted videos in this app; the app-specific scope is recorded in [FITNESS_MEDIA_POLICY.md](FITNESS_MEDIA_POLICY.md). The owner requested static checks only and no tests for this change. Check the branch and deployment history for the latest release status.

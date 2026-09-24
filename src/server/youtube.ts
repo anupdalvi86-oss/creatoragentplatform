@@ -202,3 +202,17 @@ export async function ingestYouTubePage(env: Env, creatorId: string, channelRef:
     throw error;
   }
 }
+export async function classifyYouTubeVertical(env: Env, channelRef: string): Promise<{ vertical: 'cooking' | 'fitness' | null; title: string | null; reason: string }> {
+  if (!env.YOUTUBE_API_KEY) return { vertical: null, title: null, reason: 'Official channel metadata unavailable without YouTube API credentials' };
+  try {
+    const { channelId } = await resolveChannelId(channelRef);
+    const response = await official<{ items?: Array<{ snippet?: { title?: string; description?: string; keywords?: string } }> }>('channels', { part: 'snippet', id: channelId }, env.YOUTUBE_API_KEY);
+    const snippet = response.items?.[0]?.snippet;
+    if (!snippet) return { vertical: null, title: null, reason: 'Channel metadata unavailable' };
+    const copy = `${snippet.title || ''} ${snippet.description || ''} ${snippet.keywords || ''}`.toLowerCase();
+    const fitness = (copy.match(/\b(fitness|workout|exercise|strength|pilates|yoga|gym|training|mobility)\b/g) || []).length;
+    const cooking = (copy.match(/\b(cooking|recipe|recipes|food|kitchen|baking|chef|meal)\b/g) || []).length;
+    const vertical = fitness >= 2 && fitness > cooking * 2 ? 'fitness' : cooking >= 2 && cooking > fitness * 2 ? 'cooking' : null;
+    return { vertical, title: snippet.title || null, reason: vertical ? 'Public channel title and description' : 'Public channel metadata is mixed or inconclusive' };
+  } catch { return { vertical: null, title: null, reason: 'Channel metadata could not be verified' }; }
+}

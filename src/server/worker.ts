@@ -2,6 +2,7 @@ import { z } from "zod";
 import type { CanMakeInput, ContentItem } from "../shared/types";
 import { canMake } from "./agent";
 import { checkOrigin, getSession, getAdminRole } from "./auth";
+import { fitnessRoute, fitnessAdminRoute } from './fitness';
 import {
   contentFromRow,
   creatorFromRow,
@@ -24,7 +25,7 @@ import {
   validateRedirect,
 } from "./domain";
 import { factSchema, runScout } from "./research";
-import { ingestYouTubePage, isYouTubeChannelRef } from "./youtube";
+import { ingestYouTubePage, isYouTubeChannelRef, classifyYouTubeVertical } from "./youtube";
 import { InternalEntitlementProvider } from "./entitlements";
 import { getGateVariant } from "./experiments";
 import {
@@ -225,7 +226,16 @@ async function tenantRoute(
 ): Promise<Response> {
   const creator = await getCreator(env.DB, slug);
   if (!creator) return fail("Creator not found", 404);
+  if (request.method === 'GET' && path[0] === 'manifest.webmanifest' && creator.category === 'fitness') {
+    return new Response(JSON.stringify({ id: `/creator/${creator.slug}`, name: `${creator.name} Fitness`, short_name: creator.name, description: creator.brand.hero, start_url: `/creator/${creator.slug}`, scope: `/creator/${creator.slug}`, display: 'standalone', background_color: '#f6f9f6', theme_color: creator.brand.accent, icons: [{ src: `/api/${creator.slug}/fitness-icon.svg`, sizes: 'any', type: 'image/svg+xml', purpose: 'any maskable' }] }), { headers: { 'Content-Type': 'application/manifest+json', 'Cache-Control': 'public, max-age=300' } });
+  }
+  if (request.method === 'GET' && path[0] === 'fitness-icon.svg' && creator.category === 'fitness') {
+    const color = /^#[0-9a-fA-F]{6}$/.test(creator.brand.accent) ? creator.brand.accent : '#176f68';
+    return new Response(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 192 192"><rect width="192" height="192" rx="42" fill="${color}"/><path d="M30 96h132M46 68v56M58 58v76M134 58v76M146 68v56" stroke="white" stroke-width="10" stroke-linecap="round"/></svg>`, { headers: { 'Content-Type': 'image/svg+xml', 'Cache-Control': 'public, max-age=300' } });
+  }
   if (request.method === "GET" && path[0] === "config") return reply(creator);
+  if (path[0] === 'fitness') return fitnessRoute(request, env, creator, slug, path.slice(1));
+  if (creator.category === 'fitness') return fail('Cooking feature unavailable for this creator', 404);
   if (request.method === "GET" && path[0] === "content" && path[1]) {
     const item = await getContent(env.DB, creator.id, path[1], env.APP_ENV !== "production");
     return item ? reply(item) : fail("Content not found", 404);
@@ -1011,7 +1021,7 @@ type CreatorProvisionInput = {
   slug: string;
   name: string;
   creatorUrl?: string;
-  category: "cooking";
+  category: "cooking" | "fitness";
   brand: { accent: string; hero: string; disclaimer: string };
   enabledTools: string[];
 };
@@ -1058,12 +1068,12 @@ async function provisionCreator(env: Env, input: CreatorProvisionInput) {
       "demo",
       input.creatorUrl || null,
       JSON.stringify(input.brand),
-      JSON.stringify({
+      JSON.stringify(input.category === 'fitness' ? { role: 'fitness', enabledTools: [] } : {
         id: agentId,
         role: input.category,
         enabledTools: input.enabledTools,
         instructions: "Ground responses in tenant content and label general suggestions.",
-        promptVersion: "cooking-v1",
+        promptVersion: 'cooking-v1',
         modelPolicy: "STANDARD",
         maxTokens: 220,
         maxCostUsd: 0.05,
@@ -1071,26 +1081,28 @@ async function provisionCreator(env: Env, input: CreatorProvisionInput) {
       JSON.stringify({ default: "STANDARD", maxCostUsd: 0.05 }),
       JSON.stringify({ subscriptionEnabled: false, adsEnabled: false, affiliateEnabled: false }),
     ),
-    env.DB.prepare(
+    ...(input.category === 'cooking' ? [env.DB.prepare(
       "INSERT INTO agents(id,creator_id,role,instructions,prompt_version,model_policy,memory_policy,safety_policy) VALUES(?,?,?,?,?,?,?,?)",
     ).bind(
       agentId,
       creatorId,
-      "cooking",
+      input.category,
       "Ground responses in tenant content and label general suggestions.",
-      "cooking-v1",
+      'cooking-v1',
       "STANDARD",
       "adult-preferences-only",
       "no-medical-or-allergy-assurances",
-    ),
+    )] : []),
+    ...(input.category === 'cooking' ? [
     env.DB.prepare("INSERT INTO feature_gates(creator_id,feature,required_entitlement,free_usage_limit,reset_period,trial_usage,enabled) VALUES(?,?,?,?,?,?,1)").bind(creatorId, "AI_TEXT", "premium", 5, "day", 0),
     env.DB.prepare("INSERT INTO feature_gates(creator_id,feature,required_entitlement,free_usage_limit,reset_period,trial_usage,enabled) VALUES(?,?,?,?,?,?,1)").bind(creatorId, "AI_VOICE", "premium", null, "lifetime", 2),
     env.DB.prepare("INSERT INTO feature_gates(creator_id,feature,required_entitlement,free_usage_limit,reset_period,trial_usage,enabled) VALUES(?,?,?,?,?,?,1)").bind(creatorId, "SHOPPING_LIST", "premium", 0, "lifetime", 0),
     env.DB.prepare("INSERT INTO feature_gates(creator_id,feature,required_entitlement,free_usage_limit,reset_period,trial_usage,enabled) VALUES(?,?,?,?,?,?,1)").bind(creatorId, "MEAL_PLAN", "premium", 2, "lifetime", 0),
     env.DB.prepare("INSERT INTO feature_gates(creator_id,feature,required_entitlement,free_usage_limit,reset_period,trial_usage,enabled) VALUES(?,?,?,?,?,?,1)").bind(creatorId, "SAVE_CONTENT", "premium", 5, "lifetime", 0),
+    ] : []),
     env.DB.prepare("INSERT INTO plans(id,creator_id,code,label,price_json) VALUES(?,?,?,?,?)").bind(id(), creatorId, "free", "Free", "{}"),
     env.DB.prepare("INSERT INTO plans(id,creator_id,code,label,price_json) VALUES(?,?,?,?,?)").bind(id(), creatorId, "premium", "Premium", "{}"),
-    env.DB.prepare("INSERT INTO entitlements(id,creator_id,code,description) VALUES(?,?,?,?)").bind(id(), creatorId, "premium", "Premium cooking features"),
+    ...(input.category === 'cooking' ? [env.DB.prepare("INSERT INTO entitlements(id,creator_id,code,description) VALUES(?,?,?,?)").bind(id(), creatorId, "premium", "Premium cooking features")] : []),
     ...input.enabledTools.map((tool) => env.DB.prepare("INSERT INTO agent_tools(creator_id,agent_id,tool_name) VALUES(?,?,?)").bind(creatorId, agentId, tool)),
   ]);
   return { id: creatorId, slug: input.slug, name: input.name };
@@ -1147,7 +1159,7 @@ async function adminRoute(
     return reply(
       { ok: true, mode: "local" },
       200,
-      "cap_local_admin=1; HttpOnly; SameSite=Lax; Path=/api/admin; Max-Age=86400",
+      "cap_local_admin=1; HttpOnly; SameSite=Lax; Path=/; Max-Age=86400",
     );
   const role = await getAdminRole(request, env);
   if (!role) return fail("Unauthorized", 401);
@@ -1159,6 +1171,10 @@ async function adminRoute(
     request.method !== "GET"
   )
     return fail("Owner role required", 403);
+  if (['fitness-members','fitness-review'].includes(path[0] || '')) {
+    if (role !== 'owner') return fail('Owner role required', 403);
+    return fitnessAdminRoute(request, env, path);
+  }
   if (
     request.method === "PATCH" &&
     path[0] === "experiments" &&
@@ -1481,6 +1497,17 @@ async function adminRoute(
       env.DB.prepare("DELETE FROM ai_requests WHERE creator_id=?").bind(creator.id),
       env.DB.prepare("DELETE FROM agent_tools WHERE creator_id=?").bind(creator.id),
       env.DB.prepare("DELETE FROM agents WHERE creator_id=?").bind(creator.id),
+      env.DB.prepare("DELETE FROM fitness_posts WHERE creator_id=?").bind(creator.id),
+      env.DB.prepare("DELETE FROM fitness_challenge_members WHERE creator_id=?").bind(creator.id),
+      env.DB.prepare("DELETE FROM fitness_challenges WHERE creator_id=?").bind(creator.id),
+      env.DB.prepare("DELETE FROM fitness_reminders WHERE creator_id=?").bind(creator.id),
+      env.DB.prepare("DELETE FROM fitness_workouts WHERE creator_id=?").bind(creator.id),
+      env.DB.prepare("DELETE FROM fitness_program_exercises WHERE creator_id=?").bind(creator.id),
+      env.DB.prepare("DELETE FROM fitness_programs WHERE creator_id=?").bind(creator.id),
+      env.DB.prepare("DELETE FROM fitness_entitlements WHERE creator_id=?").bind(creator.id),
+      env.DB.prepare("DELETE FROM fitness_profiles WHERE creator_id=?").bind(creator.id),
+      env.DB.prepare("DELETE FROM fitness_users WHERE creator_id=?").bind(creator.id),
+      env.DB.prepare("DELETE FROM fitness_creator_members WHERE creator_id=?").bind(creator.id),
       env.DB.prepare("DELETE FROM saved_content WHERE creator_id=?").bind(creator.id),
       env.DB.prepare("DELETE FROM shopping_list_items WHERE creator_id=?").bind(creator.id),
       env.DB.prepare("DELETE FROM shopping_lists WHERE creator_id=?").bind(creator.id),
@@ -1519,33 +1546,37 @@ async function adminRoute(
     const input = z.object({
       sourceUrl: z.string().url().refine((value) => value.startsWith("https://"), "Use an HTTPS creator channel or profile URL"),
       displayName: z.string().min(2).max(120).optional(),
+      vertical: z.enum(['auto','cooking','fitness']).default('auto'),
     }).parse(await body(request));
     const sourceUrl = new URL(input.sourceUrl).toString();
     const platform = sourcePlatform(sourceUrl);
     if (platform === "youtube" && !isYouTubeChannelRef(sourceUrl)) return fail("Use a YouTube channel URL, such as https://www.youtube.com/@creator", 422);
-    const existing = await env.DB.prepare("SELECT id,slug,name FROM creators WHERE domain=?").bind(sourceUrl).first<{ id: string; slug: string; name: string }>();
+    const detected = platform === 'youtube' ? await classifyYouTubeVertical(env, sourceUrl) : { vertical: null, title: null, reason: 'Unsupported metadata source' };
+    if (input.vertical === 'auto' && !detected.vertical) return reply({ error: 'Channel category is ambiguous. Choose cooking or fitness to confirm.', classification: detected }, 409);
+    const vertical = input.vertical === 'auto' ? detected.vertical! : input.vertical;
+    const existing = await env.DB.prepare("SELECT id,slug,name,category FROM creators WHERE domain=?").bind(sourceUrl).first<{ id: string; slug: string; name: string; category: string }>();
+    if (existing && existing.category !== vertical) return fail('This channel already belongs to a different vertical', 409);
     const identity = sourceIdentity(sourceUrl);
     const creator = existing || await provisionCreator(env, {
       slug: await uniqueCreatorSlug(env, identity.slug),
-      name: input.displayName || identity.name,
+      name: input.displayName || detected.title || identity.name,
       creatorUrl: sourceUrl,
-      category: "cooking",
-      brand: {
-        accent: "#b85c3b",
-        hero: "What can we make today?",
-        disclaimer: "Creator content is shown with source and rights status.",
-      },
-      enabledTools: ["searchCreatorKnowledge", "findSubstitution", "calculateServings", "createMealPlan", "createShoppingList"],
+      category: vertical,
+      brand: vertical === 'fitness' ? { accent: '#176f68', hero: 'Move with purpose, at your pace.', disclaimer: 'Choose movements that feel right for you. Stop if you feel discomfort.' } : { accent: '#b85c3b', hero: 'What can we make today?', disclaimer: 'Creator content is shown with source and rights status.' },
+      enabledTools: vertical === 'fitness' ? [] : ["searchCreatorKnowledge", "findSubstitution", "calculateServings", "createMealPlan", "createShoppingList"],
     });
     const contentImport = await importCreatorMetadata(env, creator.id, sourceUrl);
-    const tasks = await runCreatorSetupAgents(env, creator.id, sourceUrl, platform);
+    const tasks = vertical === 'cooking' ? await runCreatorSetupAgents(env, creator.id, sourceUrl, platform) : [];
+    if (vertical === 'fitness' && !existing) await runScout(env, { creatorId: creator.id, category: vertical, url: sourceUrl });
     return reply({
       ...creator,
       platform,
+      vertical,
+      classification: detected,
       existing: Boolean(existing),
       contentImport,
       tasks,
-      onboarding: { requestedRoleCount: SPECIALIST_ROLE_KEYS.length, dispatchedRoleCount: tasks.filter((task) => task.taskId).length },
+      onboarding: { requestedRoleCount: vertical === 'cooking' ? SPECIALIST_ROLE_KEYS.length : 0, dispatchedRoleCount: tasks.filter((task) => task.taskId).length },
       pwaUrl: `/creator/${creator.slug}`,
     }, existing ? 200 : 201);
   }

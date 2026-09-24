@@ -75,3 +75,10 @@ The intended Telegram experience is now represented by the platform runtime: Her
 
 - The default `/admin` experience now presents only one YouTube link field and one **Build my PWA** action.
 - Setup completion links directly to the generated creator PWA; the internal control room remains available at `/admin?advanced=1`.
+
+## 2026-09-25 — Fitness PWA branch
+
+- Added fitness creator selection to the existing Build PWA flow, official-metadata classification, branded tenant manifest, shared static exercise adapter, creator studio, reviewed program/challenge publication, audience onboarding and matching, workout logging, opt-in in-app reminders, community reporting and moderation.
+- Added separate fitness audience sessions and D1 records in additive migration `0007_fitness.sql`; no new specialist agents or provider infrastructure.
+- Exercise metadata follows the catalog's MIT notice; video rights are separate. The owner confirmed app-specific use of the source-hosted exercise videos on 2026-09-25. Background notification delivery and payment checkout are not configured.
+- The owner explicitly requested no tests or test commands for this change. Typecheck, lint and dry-run build are the requested checks.

@@ -124,6 +124,7 @@ type AdminRequest = <T>(path: string, method?: string, data?: unknown) => Promis
 type CreatorSetupResult = {
   pwaUrl: string;
   platform: string;
+  vertical?: 'cooking' | 'fitness';
   contentImport?: { processed?: number; status?: string; error?: string };
   tasks?: Array<{ roleKey: string; status: string; error?: string }>;
 };
@@ -619,6 +620,7 @@ function AgentEditor({
 
 function SimpleCreatorSetup({ admin }: { admin: AdminRequest }) {
   const [sourceUrl, setSourceUrl] = useState("");
+  const [vertical, setVertical] = useState<'auto'|'cooking'|'fitness'>('auto');
   const [result, setResult] = useState<CreatorSetupResult | null>(null);
   const [outreachEmail, setOutreachEmail] = useState("");
   const [error, setError] = useState("");
@@ -631,7 +633,7 @@ function SimpleCreatorSetup({ admin }: { admin: AdminRequest }) {
     setResult(null);
     try {
       const normalized = normalizeCreatorUrl(sourceUrl);
-      const setup = await admin<CreatorSetupResult>("/creator-setup", "POST", { sourceUrl: normalized });
+      const setup = await admin<CreatorSetupResult>("/creator-setup", "POST", { sourceUrl: normalized, vertical });
       setResult(setup);
       setOutreachEmail("");
     } catch (requestError) {
@@ -644,8 +646,10 @@ function SimpleCreatorSetup({ admin }: { admin: AdminRequest }) {
   function openOutreachDraft(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!result) return;
-    const subject = "Technology partnership idea for your cooking app";
-    const body = `Hi,\n\nI’m Anup from Techspawn (https://techspawn.com/). We work on digital products and services.\n\nI’ve created a live demo for your channel: ${result.pwaUrl}\n\nThis is an initial concept based on publicly available information about your channel. It is not a complete or approved recipe library. With your permission and input, we could develop an AI powered cooking app around your recipes and discuss which additional features would be useful for your audience.\n\nThe app could use your own branding. A monthly premium subscription could create recurring revenue, and we could also explore affiliate links, sponsorships or paid recipe collections. Our proposed revenue share is 60% to you and 40% to us. Before starting, we would put the agreed terms in a straightforward written partnership agreement, with clear responsibilities and revenue reporting.\n\nWe would handle the app’s development and technical work. To build a full recipe library, we would need transcripts or captions for the videos you want included. We can work through them in batches. We would also ask you to introduce the app to your audience through your channels and videos.\n\nThe app is a Progressive Web App, or PWA. Your viewers can open it from a link and add it to their phone’s home screen without downloading a separate Android or iPhone app. Since it runs on the web, there are no app store fees for distributing it, though payment processing fees may apply.\n\nWould you be open to a short call to explore the collaboration, look at the demo and discuss what we could build for your audience?\n\nWarm regards,\nAnup\nTechspawn\nanup@techspawn.com`;
+    const subject = `Technology partnership idea for your ${result.vertical === 'fitness' ? 'fitness' : 'cooking'} app`;
+    const body = result.vertical === 'fitness'
+      ? `Hi,\n\nI’m Anup from Techspawn. I’ve created an initial fitness PWA concept for your channel: ${result.pwaUrl}\n\nIt uses public channel metadata and a separate exercise demonstration catalog. No program has been published on your behalf. With your input, we could build creator reviewed routines and challenges for your audience. The video demonstration rights and partnership terms would need separate review before public release.\n\nWould you be open to a short call to review the concept?\n\nWarm regards,\nAnup\nTechspawn\nanup@techspawn.com`
+      : `Hi,\n\nI’m Anup from Techspawn (https://techspawn.com/). We work on digital products and services.\n\nI’ve created a live demo for your channel: ${result.pwaUrl}\n\nThis is an initial concept based on publicly available information about your channel. It is not a complete or approved recipe library. With your permission and input, we could develop an AI powered cooking app around your recipes and discuss which additional features would be useful for your audience.\n\nThe app could use your own branding. A monthly premium subscription could create recurring revenue, and we could also explore affiliate links, sponsorship or paid recipe collections. Before starting, we would put the agreed terms in a written partnership agreement.\n\nWould you be open to a short call to explore the collaboration?\n\nWarm regards,\nAnup\nTechspawn\nanup@techspawn.com`;
     const mailto = `mailto:${encodeURIComponent(outreachEmail.trim())}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
     window.location.href = mailto;
   }
@@ -664,10 +668,12 @@ function SimpleCreatorSetup({ admin }: { admin: AdminRequest }) {
         <h1>Share a channel.<br /><i>Get the PWA.</i></h1>
         <p className="simple-setup-intro">
           Paste one YouTube channel link. We’ll create the creator page,
-          import the public content, and run the setup agents for you.
+          import supported public metadata, and prepare the right PWA for you.
         </p>
         <form className="simple-setup-form" onSubmit={buildPwa}>
           <label htmlFor="creator-source-url">YouTube channel link</label>
+          <label htmlFor="creator-vertical">Product</label>
+          <select id="creator-vertical" value={vertical} onChange={(event)=>setVertical(event.target.value as typeof vertical)}><option value="auto">Detect from channel metadata</option><option value="fitness">Fitness — administrator confirmed</option><option value="cooking">Cooking — administrator confirmed</option></select>
           <div className="simple-setup-input-row">
             <input
               id="creator-source-url"
@@ -691,7 +697,7 @@ function SimpleCreatorSetup({ admin }: { admin: AdminRequest }) {
             <h2>Your creator PWA is ready.</h2>
             <p>
               {imported ? `${imported} public videos imported. ` : "The PWA shell is ready. "}
-              Setup agents are running in the background; you do not need to configure anything else.
+              {result.vertical === 'fitness' ? 'The fitness workspace is ready for creator programs and administrator review.' : 'Setup agents are running in the background.'}
             </p>
             {failed > 0 && <small>{failed} agent task{failed === 1 ? "" : "s"} need attention.</small>}
             <a className="simple-setup-open" href={result.pwaUrl}>Open the creator PWA ↗</a>
@@ -750,6 +756,7 @@ export default function AdminApp() {
   const [campaignPlacement, setCampaignPlacement] = useState("");
   const [scout, setScout] = useState<ScoutResult | null>(null);
   const [newCreatorUrl, setNewCreatorUrl] = useState("");
+  const [newCreatorVertical, setNewCreatorVertical] = useState<'auto'|'cooking'|'fitness'>('auto');
   const [researchUrl, setResearchUrl] = useState("");
   const [audienceNotes, setAudienceNotes] = useState("");
   const [contentNotes, setContentNotes] = useState("");
@@ -905,7 +912,7 @@ export default function AdminApp() {
         pwaUrl: string;
         contentImport?: { status?: string; processed?: number; error?: string };
         tasks?: Array<{ roleKey: string; status: string; error?: string }>;
-      }>("/creator-setup", "POST", { sourceUrl: creatorUrl });
+      }>("/creator-setup", "POST", { sourceUrl: creatorUrl, vertical: newCreatorVertical });
       setupResult = created;
       const importResult = created.contentImport || {};
       await loadCreators();
@@ -1167,6 +1174,7 @@ export default function AdminApp() {
               value={newCreatorUrl}
               onChange={(e) => setNewCreatorUrl(e.target.value)}
             />
+            <select aria-label="Creator vertical" value={newCreatorVertical} onChange={(e)=>setNewCreatorVertical(e.target.value as typeof newCreatorVertical)}><option value="auto">Detect vertical</option><option value="fitness">Fitness — confirmed</option><option value="cooking">Cooking — confirmed</option></select>
             <small>
               One link creates the creator, starts the applicable agents, and
               prepares the public PWA.

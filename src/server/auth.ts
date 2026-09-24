@@ -66,6 +66,51 @@ export async function getSession(
     cookie: `${name}=${userId}.${sig}; HttpOnly; SameSite=Lax; Path=/api/${slug}; Max-Age=31536000${secure}`,
   };
 }
+export async function getFitnessSession(
+  request: Request,
+  env: Env,
+  creatorId: string,
+  slug: string,
+): Promise<{ userId: string; cookie?: string }> {
+  const secret =
+    env.SESSION_SECRET ||
+    (env.APP_ENV === "local" ? "local-demo-secret-not-for-production" : "");
+  if (!secret) throw new Error("SESSION_SECRET is required");
+  const name = `cap_fitness_${slug.replace(/[^a-z0-9-]/g, "")}`;
+  const raw = request.headers
+    .get("cookie")
+    ?.split(";")
+    .map((value) => value.trim())
+    .find((value) => value.startsWith(`${name}=`))
+    ?.slice(name.length + 1);
+  if (raw) {
+    const [userId, sig] = raw.split(".");
+    if (
+      userId &&
+      sig &&
+      sig === (await signature(secret, `fitness.${creatorId}.${userId}`))
+    ) {
+      const row = await env.DB.prepare(
+        "SELECT id FROM fitness_users WHERE id=? AND creator_id=?",
+      )
+        .bind(userId, creatorId)
+        .first();
+      if (row) return { userId };
+    }
+  }
+  const userId = id();
+  const sig = await signature(secret, `fitness.${creatorId}.${userId}`);
+  await env.DB.prepare(
+    "INSERT INTO fitness_users(id,creator_id,session_hash) VALUES(?,?,?)",
+  )
+    .bind(userId, creatorId, sig)
+    .run();
+  const secure = env.APP_ENV === "local" ? "" : "; Secure";
+  return {
+    userId,
+    cookie: `${name}=${userId}.${sig}; HttpOnly; SameSite=Lax; Path=/api/${slug}/fitness; Max-Age=31536000${secure}`,
+  };
+}
 export function checkOrigin(request: Request, env: Env): boolean {
   if (["GET", "HEAD", "OPTIONS"].includes(request.method)) return true;
   const origin = request.headers.get("origin");
@@ -78,25 +123,10 @@ export function checkOrigin(request: Request, env: Env): boolean {
   );
 }
 export type AdminRole = "owner" | "operator" | "analyst";
-export async function getAdminRole(
+export async function getAccessEmail(
   request: Request,
   env: Env,
-): Promise<AdminRole | null> {
-  if (
-    env.APP_ENV === "local" &&
-    request.headers
-      .get("cookie")
-      ?.split(";")
-      .map((value) => value.trim())
-      .includes("cap_local_admin=1")
-  )
-    return "owner";
-  if (
-    env.APP_ENV === "local" &&
-    env.ADMIN_DEV_TOKEN &&
-    request.headers.get("authorization") === `Bearer ${env.ADMIN_DEV_TOKEN}`
-  )
-    return "owner";
+): Promise<string | null> {
   const token = request.headers.get("cf-access-jwt-assertion");
   if (!token || !env.CF_ACCESS_TEAM_DOMAIN || !env.CF_ACCESS_AUD) return null;
   try {
@@ -119,9 +149,9 @@ export async function getAdminRole(
       !payload.email
     )
       return null;
-    const jwksResponse = await fetch(`${issuer}/cdn-cgi/access/certs`);
-    if (!jwksResponse.ok) return null;
-    const jwks = (await jwksResponse.json()) as {
+    const response = await fetch(`${issuer}/cdn-cgi/access/certs`);
+    if (!response.ok) return null;
+    const jwks = (await response.json()) as {
       keys: Array<JsonWebKey & { kid?: string }>;
     };
     const jwk = jwks.keys.find((key) => key.kid === header.kid);
@@ -133,24 +163,45 @@ export async function getAdminRole(
       false,
       ["verify"],
     );
-    if (
-      !(await crypto.subtle.verify(
-        "RSASSA-PKCS1-v1_5",
-        key,
-        fromB64(signaturePart),
-        encoder.encode(`${headerPart}.${payloadPart}`),
-      ))
-    )
-      return null;
-    const admin = await env.DB.prepare(
-      "SELECT role FROM admin_users WHERE email=?",
-    )
-      .bind(payload.email.toLowerCase())
-      .first<{ role: string }>();
-    return admin && ["owner", "operator", "analyst"].includes(admin.role)
-      ? (admin.role as AdminRole)
+    return (await crypto.subtle.verify(
+      "RSASSA-PKCS1-v1_5",
+      key,
+      fromB64(signaturePart),
+      encoder.encode(`${headerPart}.${payloadPart}`),
+    ))
+      ? payload.email.toLowerCase()
       : null;
   } catch {
     return null;
   }
+}
+export async function getAdminRole(
+  request: Request,
+  env: Env,
+): Promise<AdminRole | null> {
+  if (
+    env.APP_ENV === "local" &&
+    request.headers
+      .get("cookie")
+      ?.split(";")
+      .map((value) => value.trim())
+      .includes("cap_local_admin=1")
+  )
+    return "owner";
+  if (
+    env.APP_ENV === "local" &&
+    env.ADMIN_DEV_TOKEN &&
+    request.headers.get("authorization") === `Bearer ${env.ADMIN_DEV_TOKEN}`
+  )
+    return "owner";
+  const email = await getAccessEmail(request, env);
+  if (!email) return null;
+  const admin = await env.DB.prepare(
+    "SELECT role FROM admin_users WHERE email=?",
+  )
+    .bind(email)
+    .first<{ role: string }>();
+  return admin && ["owner", "operator", "analyst"].includes(admin.role)
+    ? (admin.role as AdminRole)
+    : null;
 }
