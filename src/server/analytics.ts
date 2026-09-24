@@ -13,12 +13,19 @@ export type PageViewContext = {
   };
 };
 
+export type EdgeLocation = {
+  country?: string | null;
+  region?: string | null;
+  regionCode?: string | null;
+  city?: string | null;
+};
+
 function headerValue(headers: Headers, name: string, maxLength: number): string | undefined {
   const value = headers.get(name)?.trim().slice(0, maxLength);
   return value || undefined;
 }
 
-export function classifyVisitor(headers: Headers) {
+export function classifyVisitor(headers: Headers, edgeLocation: EdgeLocation = {}) {
   const agent = headers.get("user-agent") || "";
   const browser = /Edg\//.test(agent)
     ? "Edge"
@@ -52,18 +59,20 @@ export function classifyVisitor(headers: Headers) {
     browser,
     os,
     device,
-    country: headerValue(headers, "cf-ipcountry", 2)?.toUpperCase(),
-    region: headerValue(headers, "cf-region", 80),
-    city: headerValue(headers, "cf-ipcity", 80),
+    country: (edgeLocation.country || headerValue(headers, "cf-ipcountry", 2))?.toUpperCase(),
+    region: edgeLocation.region?.slice(0, 80) || headerValue(headers, "cf-region", 80),
+    ...(edgeLocation.regionCode ? { regionCode: edgeLocation.regionCode.slice(0, 10) } : {}),
+    city: edgeLocation.city?.slice(0, 80) || headerValue(headers, "cf-ipcity", 80),
   };
 }
 
 export function pageViewMetadata(
   headers: Headers,
   context: PageViewContext,
+  edgeLocation?: EdgeLocation,
 ): Record<string, unknown> {
   return {
     ...context,
-    ...classifyVisitor(headers),
+    ...classifyVisitor(headers, edgeLocation),
   };
 }

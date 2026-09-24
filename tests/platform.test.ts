@@ -23,6 +23,13 @@ test('visitor analytics stores coarse device and edge location without raw netwo
   assert.equal(metadata.pagePath, '/creator/demo');
   assert.equal(JSON.stringify(metadata).includes('203.0.113.17'), false);
   assert.equal(JSON.stringify(metadata).includes(headers.get('user-agent')!), false);
+  const edgeMetadata = pageViewMetadata(new Headers(), { pagePath: '/creator/demo', screen: 'home' }, {
+    country: 'SE', region: 'Stockholm County', regionCode: 'AB', city: 'Stockholm',
+  });
+  assert.equal(edgeMetadata.country, 'SE');
+  assert.equal(edgeMetadata.city, 'Stockholm');
+  assert.equal(edgeMetadata.region, 'Stockholm County');
+  assert.equal(edgeMetadata.regionCode, 'AB');
 });
 
 test('substitution makes no creator claim without source evidence', async () => {

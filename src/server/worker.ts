@@ -44,7 +44,7 @@ import {
 import { dispatchTask, runTaskById, advanceTaskHandoff } from "./agentTaskRunner";
 import { SPECIALIST_ROLE_KEYS } from "./specialistAgents";
 import { creatorOnboardingJobs } from "./creatorOnboarding";
-import { pageViewMetadata } from "./analytics";
+import { pageViewMetadata, type EdgeLocation } from "./analytics";
 export { AgentTaskWorkflow } from "./agentWorkflow";
 
 const reply = (data: unknown, status = 200, cookie?: string) =>
@@ -420,7 +420,7 @@ async function tenantRoute(
           ...(input.viewport ? { viewport: input.viewport } : {}),
           ...(input.language ? { language: input.language } : {}),
           ...(input.campaign ? { campaign: input.campaign } : {}),
-        })
+        }, request.cf as unknown as EdgeLocation | undefined)
       : {
           ...(input.contentId ? { contentId: input.contentId } : {}),
           ...(input.resultCount !== undefined ? { resultCount: input.resultCount } : {}),
