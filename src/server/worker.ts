@@ -1449,13 +1449,11 @@ async function adminRoute(
   }
   if (request.method === "DELETE" && path[0] === "creators" && path[1]) {
     if (role !== "owner") return fail("Owner role required", 403);
-    const input = z.object({ confirmation: z.string().min(1).max(60) }).parse(await body(request));
+    z.object({ confirmed: z.literal(true) }).parse(await body(request));
     const creator = await env.DB.prepare("SELECT id,slug FROM creators WHERE id=?")
       .bind(path[1])
       .first<{ id: string; slug: string }>();
     if (!creator) return fail("Workspace not found", 404);
-    if (input.confirmation !== creator.slug) return fail("Workspace confirmation did not match", 422);
-
     // Remove creator-scoped vectors before D1 records, so a vector deletion
     // failure cannot leave the workspace's searchable data behind.
     if (env.VECTOR) {

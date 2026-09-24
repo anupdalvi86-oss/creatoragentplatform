@@ -699,6 +699,7 @@ export default function AdminApp() {
   const [token, setToken] = useState("");
   const [creators, setCreators] = useState<Creator[]>([]);
   const [selectedId, setSelectedId] = useState("");
+  const [workspaceToDelete, setWorkspaceToDelete] = useState<Creator | null>(null);
   const [tab, setTab] = useState<
     "overview" | "content" | "agent" | "operations" | "scout" | "monetization"
   >("overview");
@@ -970,24 +971,16 @@ export default function AdminApp() {
       setCreators(await admin<Creator[]>("/creators"));
     }, "Creator identity saved.");
   }
-  async function deleteWorkspace() {
-    if (!selected) return;
-    const confirmation = window.prompt(
-      `Permanently delete “${selected.name}” and all of its workspace data? Type ${selected.slug} to confirm.`,
-    );
-    if (confirmation !== selected.slug) {
-      if (confirmation !== null) setMessage("Workspace was not deleted because the confirmation did not match.");
-      return;
-    }
-    const deletedName = selected.name;
+  async function deleteWorkspace(creator: Creator) {
     setBusy(true);
     setMessage("");
     try {
-      await admin(`/creators/${selected.id}`, "DELETE", { confirmation });
+      await admin(`/creators/${creator.id}`, "DELETE", { confirmed: true });
       const remaining = await admin<Creator[]>("/creators");
       setCreators(remaining);
-      setSelectedId(remaining[0]?.id || "");
-      setMessage(`${deletedName} workspace deleted.`);
+      if (selectedId === creator.id) setSelectedId(remaining[0]?.id || "");
+      setWorkspaceToDelete(null);
+      setMessage(`${creator.name} workspace deleted.`);
     } catch (error) {
       setMessage((error as Error).message);
     } finally {
@@ -1115,16 +1108,26 @@ export default function AdminApp() {
           <button onClick={loadCreators}>Refresh creators</button>
           <div className="admin-creator-list">
             {creators.map((creator) => (
-              <button
-                className={creator.id === selectedId ? "active" : ""}
-                key={creator.id}
-                onClick={() => setSelectedId(creator.id)}
-              >
-                {creator.name}
-                <small>
-                  {creator.category} · {creator.status}
-                </small>
-              </button>
+              <div className="admin-workspace-row" key={creator.id}>
+                <button
+                  className={creator.id === selectedId ? "active" : ""}
+                  onClick={() => setSelectedId(creator.id)}
+                >
+                  {creator.name}
+                  <small>
+                    {creator.category} · {creator.status}
+                  </small>
+                </button>
+                <button
+                  className="admin-workspace-delete"
+                  aria-label={`Delete ${creator.name} workspace`}
+                  title={`Delete ${creator.name} workspace`}
+                  disabled={busy}
+                  onClick={() => setWorkspaceToDelete(creator)}
+                >
+                  ×
+                </button>
+              </div>
             ))}
           </div>
           <div className="admin-create">
@@ -1144,17 +1147,6 @@ export default function AdminApp() {
               Build PWA
             </button>
           </div>
-          {selected && (
-            <div className="admin-create admin-danger-zone">
-              <h3>Delete workspace</h3>
-              <small>
-                Permanently removes this workspace and its content, settings, visitor data, and agent history.
-              </small>
-              <button className="admin-delete-workspace" disabled={busy} onClick={deleteWorkspace}>
-                Delete {selected.name}
-              </button>
-            </div>
-          )}
         </aside>
         <main className="admin-main">
           <div className="admin-title">
@@ -1180,6 +1172,30 @@ export default function AdminApp() {
           {message && (
             <div className="admin-message" role="status">
               {message}
+            </div>
+          )}
+          {workspaceToDelete && (
+            <div className="admin-dialog-backdrop">
+              <section
+                className="admin-confirm-dialog"
+                role="alertdialog"
+                aria-modal="true"
+                aria-labelledby="delete-workspace-title"
+                aria-describedby="delete-workspace-description"
+              >
+                <h2 id="delete-workspace-title">Delete workspace?</h2>
+                <p id="delete-workspace-description">
+                  Permanently delete {workspaceToDelete.name} and all of its content, settings, visitor data, and agent history?
+                </p>
+                <div className="admin-confirm-actions">
+                  <button disabled={busy} onClick={() => deleteWorkspace(workspaceToDelete)}>
+                    Yes, delete
+                  </button>
+                  <button disabled={busy} onClick={() => setWorkspaceToDelete(null)}>
+                    No, keep it
+                  </button>
+                </div>
+              </section>
             </div>
           )}
           {selected && (
