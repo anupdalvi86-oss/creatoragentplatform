@@ -620,6 +620,7 @@ function AgentEditor({
 function SimpleCreatorSetup({ admin }: { admin: AdminRequest }) {
   const [sourceUrl, setSourceUrl] = useState("");
   const [result, setResult] = useState<CreatorSetupResult | null>(null);
+  const [outreachEmail, setOutreachEmail] = useState("");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
 
@@ -632,11 +633,21 @@ function SimpleCreatorSetup({ admin }: { admin: AdminRequest }) {
       const normalized = normalizeCreatorUrl(sourceUrl);
       const setup = await admin<CreatorSetupResult>("/creator-setup", "POST", { sourceUrl: normalized });
       setResult(setup);
+      setOutreachEmail("");
     } catch (requestError) {
       setError((requestError as Error).message);
     } finally {
       setBusy(false);
     }
+  }
+
+  function openOutreachDraft(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!result) return;
+    const subject = "Technology partnership idea for your cooking app";
+    const body = `Hi,\n\nI’m Anup from Techspawn (https://techspawn.com/). We work on digital products and services.\n\nI’ve created a live demo for your channel: ${result.pwaUrl}\n\nThis is an initial concept based on publicly available information about your channel. It is not a complete or approved recipe library. With your permission and input, we could develop an AI powered cooking app around your recipes and discuss which additional features would be useful for your audience.\n\nThe app could use your own branding. A monthly premium subscription could create recurring revenue, and we could also explore affiliate links, sponsorships or paid recipe collections. Our proposed revenue share is 60% to you and 40% to us. Before starting, we would put the agreed terms in a straightforward written partnership agreement, with clear responsibilities and revenue reporting.\n\nWe would handle the app’s development and technical work. To build a full recipe library, we would need transcripts or captions for the videos you want included. We can work through them in batches. We would also ask you to introduce the app to your audience through your channels and videos.\n\nThe app is a Progressive Web App, or PWA. Your viewers can open it from a link and add it to their phone’s home screen without downloading a separate Android or iPhone app. Since it runs on the web, there are no app store fees for distributing it, though payment processing fees may apply.\n\nWould you be open to a short call to explore the collaboration, look at the demo and discuss what we could build for your audience?\n\nWarm regards,\nAnup\nTechspawn\nanup@techspawn.com`;
+    const mailto = `mailto:${encodeURIComponent(outreachEmail.trim())}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+    window.location.href = mailto;
   }
 
   const imported = result?.contentImport?.processed || 0;
@@ -684,6 +695,23 @@ function SimpleCreatorSetup({ admin }: { admin: AdminRequest }) {
             </p>
             {failed > 0 && <small>{failed} agent task{failed === 1 ? "" : "s"} need attention.</small>}
             <a className="simple-setup-open" href={result.pwaUrl}>Open the creator PWA ↗</a>
+            <form className="simple-setup-email" onSubmit={openOutreachDraft}>
+              <label htmlFor="creator-outreach-email">Prepare an outreach email</label>
+              <p>Enter the creator’s business email. We’ll open a draft with a generic greeting and the PWA link.</p>
+              <div className="simple-setup-email-row">
+                <input
+                  id="creator-outreach-email"
+                  type="email"
+                  autoComplete="email"
+                  required
+                  value={outreachEmail}
+                  onChange={(event) => setOutreachEmail(event.target.value)}
+                  placeholder="creator@example.com"
+                />
+                <button type="submit">Open email draft</button>
+              </div>
+              <small>The portal does not send or save the email. Review the address and send it from your mail app. Select anup@techspawn.com as the sender if asked.</small>
+            </form>
           </section>
         )}
         <p className="simple-setup-note">Public metadata is imported automatically. Transcripts and derived recipe steps require creator authorization.</p>
