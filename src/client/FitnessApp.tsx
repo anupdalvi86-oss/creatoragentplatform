@@ -102,7 +102,10 @@ async function api<T>(
   method = "GET",
   data?: unknown,
 ): Promise<T> {
-  const response = await fetch(`${base}${path}`, {
+  const endpoint = path.startsWith("/studio")
+    ? `/api/admin/fitness-studio/${encodeURIComponent(slug)}${path.slice("/studio".length)}`
+    : `${base}${path}`;
+  const response = await fetch(endpoint, {
     method,
     credentials: "same-origin",
     headers: data ? { "Content-Type": "application/json" } : {},
@@ -1990,6 +1993,9 @@ export default function FitnessApp({ creator }: { creator: Creator }) {
       <footer className="fit-footer">
         {creator.brand.disclaimer} · Choose easier options or skip movements
         that do not feel right. No guaranteed weight or appearance outcome.
+        {!studioAllowed && (
+          <> · <a href={`/api/admin/fitness-studio/${encodeURIComponent(slug)}/login`}>Creator sign in</a></>
+        )}
       </footer>
     </div>
   );

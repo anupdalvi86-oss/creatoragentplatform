@@ -2407,6 +2407,8 @@ export default {
       const parts = url.pathname.split("/").filter(Boolean);
       if (parts[0] === "go" && parts[1] && parts[2] && request.method === "GET")
         return affiliateRoute(env, parts[1], parts[2]);
+      if (parts[0] === "api" && parts[1] === "admin" && parts[2] === "fitness-studio" && parts[3])
+        return tenantRoute(request, env, parts[3], ["fitness", "studio", ...parts.slice(4)]);
       if (parts[0] === "api" && parts[1] === "admin")
         return adminRoute(request, env, parts.slice(2));
       if (parts[0] === "api" && parts[1])

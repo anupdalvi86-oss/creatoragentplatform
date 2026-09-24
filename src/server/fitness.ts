@@ -204,6 +204,8 @@ export async function fitnessRoute(
   if (path[0] === "studio") {
     if (!(await creatorAccess(request, env, creator.id)))
       return error("Creator access required", 403);
+    if (request.method === "GET" && path[1] === "login")
+      return Response.redirect(new URL(`/creator/${slug}`, request.url), 302);
     if (request.method === "GET" && path[1] === "programs")
       return answer({ items: await programs(env, creator.id, false) });
     if (request.method === "GET" && path[1] === "program" && path[2]) {
