@@ -970,6 +970,30 @@ export default function AdminApp() {
       setCreators(await admin<Creator[]>("/creators"));
     }, "Creator identity saved.");
   }
+  async function deleteWorkspace() {
+    if (!selected) return;
+    const confirmation = window.prompt(
+      `Permanently delete “${selected.name}” and all of its workspace data? Type ${selected.slug} to confirm.`,
+    );
+    if (confirmation !== selected.slug) {
+      if (confirmation !== null) setMessage("Workspace was not deleted because the confirmation did not match.");
+      return;
+    }
+    const deletedName = selected.name;
+    setBusy(true);
+    setMessage("");
+    try {
+      await admin(`/creators/${selected.id}`, "DELETE", { confirmation });
+      const remaining = await admin<Creator[]>("/creators");
+      setCreators(remaining);
+      setSelectedId(remaining[0]?.id || "");
+      setMessage(`${deletedName} workspace deleted.`);
+    } catch (error) {
+      setMessage((error as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
   async function saveContent(item: ContentRow, metaChanged: boolean) {
     await run(async () => {
       await admin(`/content/${selectedId}/${item.id}`, "PATCH", {
@@ -1120,6 +1144,17 @@ export default function AdminApp() {
               Build PWA
             </button>
           </div>
+          {selected && (
+            <div className="admin-create admin-danger-zone">
+              <h3>Delete workspace</h3>
+              <small>
+                Permanently removes this workspace and its content, settings, visitor data, and agent history.
+              </small>
+              <button className="admin-delete-workspace" disabled={busy} onClick={deleteWorkspace}>
+                Delete {selected.name}
+              </button>
+            </div>
+          )}
         </aside>
         <main className="admin-main">
           <div className="admin-title">

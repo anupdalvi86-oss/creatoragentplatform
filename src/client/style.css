@@ -705,3 +705,5 @@ body { font-family: 'Montserrat', system-ui, sans-serif; color: var(--brand-ink)
   .hero-food-image, .hero-illustration { height: 195px; min-height: 195px; }
 }
 @media (max-width: 360px) { .action-grid { grid-template-columns: minmax(0, 1fr); } }
+
+.admin-danger-zone{margin-top:28px}.admin-danger-zone h3{color:#943f32}.admin-danger-zone small{display:block;color:#7f736d;line-height:1.5}.admin-create .admin-delete-workspace{margin-top:12px;background:#a4473c;color:#fff}.admin-create .admin-delete-workspace:hover{background:#89372f}

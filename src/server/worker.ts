@@ -1447,6 +1447,76 @@ async function adminRoute(
     }>();
     return reply(rows.results.map((row) => creatorFromRow(row)));
   }
+  if (request.method === "DELETE" && path[0] === "creators" && path[1]) {
+    if (role !== "owner") return fail("Owner role required", 403);
+    const input = z.object({ confirmation: z.string().min(1).max(60) }).parse(await body(request));
+    const creator = await env.DB.prepare("SELECT id,slug FROM creators WHERE id=?")
+      .bind(path[1])
+      .first<{ id: string; slug: string }>();
+    if (!creator) return fail("Workspace not found", 404);
+    if (input.confirmation !== creator.slug) return fail("Workspace confirmation did not match", 422);
+
+    // Remove creator-scoped vectors before D1 records, so a vector deletion
+    // failure cannot leave the workspace's searchable data behind.
+    if (env.VECTOR) {
+      const embeddings = await env.DB.prepare("SELECT vector_id FROM content_embeddings WHERE creator_id=?")
+        .bind(creator.id)
+        .all<{ vector_id: string }>();
+      const vectorIds = embeddings.results.map((row) => row.vector_id);
+      if (vectorIds.length) {
+        try {
+          await env.VECTOR.deleteByIds(vectorIds);
+        } catch {
+          return fail("Workspace vectors could not be deleted. No workspace records were removed.", 502);
+        }
+      }
+    }
+
+    await env.DB.batch([
+      env.DB.prepare("DELETE FROM agent_task_handoffs WHERE parent_task_id IN (SELECT id FROM agent_tasks WHERE creator_id=?) OR child_task_id IN (SELECT id FROM agent_tasks WHERE creator_id=?)").bind(creator.id, creator.id),
+      env.DB.prepare("DELETE FROM agent_task_approvals WHERE task_id IN (SELECT id FROM agent_tasks WHERE creator_id=?)").bind(creator.id),
+      env.DB.prepare("DELETE FROM agent_task_runs WHERE task_id IN (SELECT id FROM agent_tasks WHERE creator_id=?)").bind(creator.id),
+      env.DB.prepare("DELETE FROM data_quality_findings WHERE creator_id=?").bind(creator.id),
+      env.DB.prepare("DELETE FROM content_librarian_operations WHERE creator_id=?").bind(creator.id),
+      env.DB.prepare("DELETE FROM agent_tasks WHERE creator_id=?").bind(creator.id),
+      env.DB.prepare("DELETE FROM ai_usage WHERE creator_id=?").bind(creator.id),
+      env.DB.prepare("DELETE FROM ai_requests WHERE creator_id=?").bind(creator.id),
+      env.DB.prepare("DELETE FROM agent_tools WHERE creator_id=?").bind(creator.id),
+      env.DB.prepare("DELETE FROM agents WHERE creator_id=?").bind(creator.id),
+      env.DB.prepare("DELETE FROM saved_content WHERE creator_id=?").bind(creator.id),
+      env.DB.prepare("DELETE FROM shopping_list_items WHERE creator_id=?").bind(creator.id),
+      env.DB.prepare("DELETE FROM shopping_lists WHERE creator_id=?").bind(creator.id),
+      env.DB.prepare("DELETE FROM meal_plan_items WHERE creator_id=?").bind(creator.id),
+      env.DB.prepare("DELETE FROM meal_plans WHERE creator_id=?").bind(creator.id),
+      env.DB.prepare("DELETE FROM usage_limits WHERE creator_id=?").bind(creator.id),
+      env.DB.prepare("DELETE FROM user_entitlements WHERE creator_id=?").bind(creator.id),
+      env.DB.prepare("DELETE FROM user_preferences WHERE creator_id=?").bind(creator.id),
+      env.DB.prepare("DELETE FROM users WHERE creator_id=?").bind(creator.id),
+      env.DB.prepare("DELETE FROM content_tags WHERE creator_id=?").bind(creator.id),
+      env.DB.prepare("DELETE FROM content_embeddings WHERE creator_id=?").bind(creator.id),
+      env.DB.prepare("DELETE FROM content_items WHERE creator_id=?").bind(creator.id),
+      env.DB.prepare("DELETE FROM content_sources WHERE creator_id=?").bind(creator.id),
+      env.DB.prepare("DELETE FROM affiliate_clicks WHERE creator_id=?").bind(creator.id),
+      env.DB.prepare("DELETE FROM campaign_events WHERE creator_id=?").bind(creator.id),
+      env.DB.prepare("DELETE FROM experiment_assignments WHERE creator_id=?").bind(creator.id),
+      env.DB.prepare("DELETE FROM experiments WHERE creator_id=?").bind(creator.id),
+      env.DB.prepare("DELETE FROM product_specs WHERE creator_id=?").bind(creator.id),
+      env.DB.prepare("DELETE FROM product_opportunities WHERE creator_id=?").bind(creator.id),
+      env.DB.prepare("DELETE FROM affiliate_links WHERE creator_id=?").bind(creator.id),
+      env.DB.prepare("DELETE FROM campaigns WHERE creator_id=?").bind(creator.id),
+      env.DB.prepare("DELETE FROM revenue_events WHERE creator_id=?").bind(creator.id),
+      env.DB.prepare("DELETE FROM events WHERE creator_id=?").bind(creator.id),
+      env.DB.prepare("DELETE FROM creator_facts WHERE creator_id=?").bind(creator.id),
+      env.DB.prepare("DELETE FROM research_runs WHERE creator_id=?").bind(creator.id),
+      env.DB.prepare("DELETE FROM feature_gates WHERE creator_id=?").bind(creator.id),
+      env.DB.prepare("DELETE FROM creator_features WHERE creator_id=?").bind(creator.id),
+      env.DB.prepare("DELETE FROM creator_domains WHERE creator_id=?").bind(creator.id),
+      env.DB.prepare("DELETE FROM plans WHERE creator_id=?").bind(creator.id),
+      env.DB.prepare("DELETE FROM entitlements WHERE creator_id=?").bind(creator.id),
+      env.DB.prepare("DELETE FROM creators WHERE id=?").bind(creator.id),
+    ]);
+    return reply({ ok: true, id: creator.id, slug: creator.slug });
+  }
   if (request.method === "POST" && path[0] === "creator-setup") {
     const input = z.object({
       sourceUrl: z.string().url().refine((value) => value.startsWith("https://"), "Use an HTTPS creator channel or profile URL"),
