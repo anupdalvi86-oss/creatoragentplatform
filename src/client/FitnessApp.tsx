@@ -97,6 +97,7 @@ const slug =
   new URLSearchParams(location.search).get("creator") ||
   "";
 const base = `/api/${encodeURIComponent(slug)}/fitness`;
+const studioTarget = new URLSearchParams(location.search).get("studio");
 async function api<T>(
   path: string,
   method = "GET",
@@ -357,10 +358,25 @@ export default function FitnessApp({ creator }: { creator: Creator }) {
       setReminder(r.reminder || blankReminder);
       setChallenges(c.items);
       try {
-        await api("/studio/programs");
+        const studio = await api<{ items: Program[] }>("/studio/programs");
         setStudioAllowed(true);
+        if (studioTarget) {
+          setStudioPrograms(studio.items);
+          if (studioTarget === "new") setDraft(blankDraft());
+          else if (studioTarget !== "challenges") {
+            try {
+              const detail = await api<Program>(`/studio/program/${encodeURIComponent(studioTarget)}`);
+              setDraft(detail);
+              setSelectedDay(detail.days[0]?.day || 1);
+            } catch {
+              setMessage("That program could not be opened. Choose one from the studio list.");
+            }
+          }
+          setScreen("studio");
+        }
       } catch {
         setStudioAllowed(false);
+        if (studioTarget) setMessage("Creator access is required. Use Creator sign in below, then open the workout editor again.");
       }
     } catch (e) {
       report(e);
@@ -1994,7 +2010,7 @@ export default function FitnessApp({ creator }: { creator: Creator }) {
         {creator.brand.disclaimer} · Choose easier options or skip movements
         that do not feel right. No guaranteed weight or appearance outcome.
         {!studioAllowed && (
-          <> · <a href={`/api/admin/fitness-studio/${encodeURIComponent(slug)}/login`}>Creator sign in</a></>
+          <> · <a href={`/api/admin/fitness-studio/${encodeURIComponent(slug)}/login${studioTarget ? `?studio=${encodeURIComponent(studioTarget)}` : ""}`}>Creator sign in</a></>
         )}
       </footer>
     </div>

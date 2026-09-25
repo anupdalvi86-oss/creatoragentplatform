@@ -204,8 +204,13 @@ export async function fitnessRoute(
   if (path[0] === "studio") {
     if (!(await creatorAccess(request, env, creator.id)))
       return error("Creator access required", 403);
-    if (request.method === "GET" && path[1] === "login")
-      return Response.redirect(new URL(`/creator/${slug}`, request.url), 302);
+    if (request.method === "GET" && path[1] === "login") {
+      const destination = new URL(`/creator/${slug}`, request.url);
+      const studioTarget = query.get("studio");
+      if (studioTarget && (studioTarget === "new" || studioTarget === "challenges" || z.uuid().safeParse(studioTarget).success))
+        destination.searchParams.set("studio", studioTarget);
+      return Response.redirect(destination, 302);
+    }
     if (request.method === "GET" && path[1] === "programs")
       return answer({ items: await programs(env, creator.id, false) });
     if (request.method === "GET" && path[1] === "program" && path[2]) {
@@ -741,6 +746,12 @@ export async function fitnessAdminRoute(
     .bind(creatorId)
     .first();
   if (!tenant) return error("Fitness creator not found", 404);
+  if (path[0] === "fitness-summary" && request.method === "GET") {
+    const workouts = await env.DB.prepare(
+      "SELECT COUNT(*) completions, COUNT(DISTINCT user_id) participants FROM fitness_workouts WHERE creator_id=?",
+    ).bind(creatorId).first<{ completions: number; participants: number }>();
+    return answer({ completions: workouts?.completions || 0, participants: workouts?.participants || 0 });
+  }
   if (path[0] === "fitness-members") {
     if (request.method === "GET") {
       const rows = await env.DB.prepare(

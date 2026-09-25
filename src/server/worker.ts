@@ -1175,6 +1175,8 @@ async function adminRoute(
     if (role !== 'owner') return fail('Owner role required', 403);
     return fitnessAdminRoute(request, env, path);
   }
+  if (path[0] === 'fitness-summary' && request.method === 'GET')
+    return fitnessAdminRoute(request, env, path);
   if (
     request.method === "PATCH" &&
     path[0] === "experiments" &&
@@ -1697,23 +1699,24 @@ async function adminRoute(
       })
       .parse(await body(request));
     const existing = await env.DB.prepare(
-      "SELECT name,domain,brand_json,status FROM creators WHERE id=?",
+      "SELECT name,domain,brand_json,status,category FROM creators WHERE id=?",
     )
       .bind(path[1])
-      .first<{ name: string; domain: string | null; brand_json: string; status: string }>();
+      .first<{ name: string; domain: string | null; brand_json: string; status: string; category: string }>();
     if (!existing) return fail("Creator not found", 404);
-    if (
-      input.status === "active" &&
-      !(await env.DB.prepare(
-        "SELECT 1 FROM content_items WHERE creator_id=? AND processing_status='ready' AND rights_status IN ('creator_authorized','creator_uploaded','licensed') LIMIT 1",
-      )
-        .bind(path[1])
-        .first())
-    )
-      return fail(
-        "Activate only after approved creator content is available",
-        422,
-      );
+    if (input.status === "active") {
+      const approvedContent = existing.category === "fitness"
+        ? await env.DB.prepare(
+            "SELECT 1 FROM fitness_programs WHERE creator_id=? AND review_status='published' LIMIT 1",
+          ).bind(path[1]).first()
+        : await env.DB.prepare(
+            "SELECT 1 FROM content_items WHERE creator_id=? AND processing_status='ready' AND rights_status IN ('creator_authorized','creator_uploaded','licensed') LIMIT 1",
+          ).bind(path[1]).first();
+      if (!approvedContent)
+        return fail(existing.category === "fitness"
+          ? "Activate only after a reviewed fitness program is published"
+          : "Activate only after approved creator content is available", 422);
+    }
     await env.DB.prepare(
       "UPDATE creators SET name=?,domain=?,brand_json=?,status=? WHERE id=?",
     )

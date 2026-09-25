@@ -1,5 +1,6 @@
 import { useEffect, useState, type FormEvent } from "react";
 import type { Creator } from "../shared/types";
+import FitnessAdminWorkspace from "./FitnessAdminWorkspace";
 
 type Metrics = {
   events: Array<{ event_type: string; count: number }>;
@@ -123,6 +124,7 @@ type QualityFindingRow = {
 type AdminRequest = <T>(path: string, method?: string, data?: unknown) => Promise<T>;
 type CreatorSetupResult = {
   pwaUrl: string;
+  slug?: string;
   platform: string;
   vertical?: 'cooking' | 'fitness';
   contentImport?: { processed?: number; status?: string; error?: string };
@@ -206,7 +208,7 @@ function BrandEditor({
         <input value={hero} onChange={(event) => setHero(event.target.value)} />
       </label>
       <label>
-        Disclosure
+        {creator.category === "fitness" ? "Movement and safety note" : "Disclosure"}
         <textarea
           value={disclaimer}
           onChange={(event) => setDisclaimer(event.target.value)}
@@ -235,8 +237,9 @@ function BrandEditor({
         </select>
       </label>
       <p>
-        Activation requires at least one ready source marked creator authorized,
-        creator uploaded, or licensed.
+        {creator.category === "fitness"
+          ? "Activation requires a reviewed and published fitness program."
+          : "Activation requires at least one ready source marked creator authorized, creator uploaded, or licensed."}
       </p>
       <button
         disabled={busy}
@@ -648,7 +651,7 @@ function SimpleCreatorSetup({ admin }: { admin: AdminRequest }) {
     if (!result) return;
     const subject = `Technology partnership idea for your ${result.vertical === 'fitness' ? 'fitness' : 'cooking'} app`;
     const body = result.vertical === 'fitness'
-      ? `Hi,\n\nI’m Anup from Techspawn. I’ve created an initial fitness PWA concept for your channel: ${result.pwaUrl}\n\nIt uses public channel metadata and a separate exercise demonstration catalog. No program has been published on your behalf. With your input, we could build creator reviewed routines and challenges for your audience. The video demonstration rights and partnership terms would need separate review before public release.\n\nWould you be open to a short call to review the concept?\n\nWarm regards,\nAnup\nTechspawn\nanup@techspawn.com`
+      ? `Hi,\n\nI’m Anup from Techspawn. I’ve created an initial fitness PWA concept for your channel: ${result.pwaUrl}\n\nIt uses public channel metadata and a separate exercise demonstration catalog. No program has been published on your behalf. With your input, we could build creator reviewed routines and challenges for your audience. Your program content and partnership terms would need your review before public release.\n\nWould you be open to a short call to review the concept?\n\nWarm regards,\nAnup\nTechspawn\nanup@techspawn.com`
       : `Hi,\n\nI’m Anup from Techspawn (https://techspawn.com/). We work on digital products and services.\n\nI’ve created a live demo for your channel: ${result.pwaUrl}\n\nThis is an initial concept based on publicly available information about your channel. It is not a complete or approved recipe library. With your permission and input, we could develop an AI powered cooking app around your recipes and discuss which additional features would be useful for your audience.\n\nThe app could use your own branding. A monthly premium subscription could create recurring revenue, and we could also explore affiliate links, sponsorship or paid recipe collections. Before starting, we would put the agreed terms in a written partnership agreement.\n\nWould you be open to a short call to explore the collaboration?\n\nWarm regards,\nAnup\nTechspawn\nanup@techspawn.com`;
     const mailto = `mailto:${encodeURIComponent(outreachEmail.trim())}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
     window.location.href = mailto;
@@ -701,6 +704,9 @@ function SimpleCreatorSetup({ admin }: { admin: AdminRequest }) {
             </p>
             {failed > 0 && <small>{failed} agent task{failed === 1 ? "" : "s"} need attention.</small>}
             <a className="simple-setup-open" href={result.pwaUrl}>Open the creator PWA ↗</a>
+            {result.vertical === "fitness" && (
+              <a className="simple-setup-open" href={`/admin?advanced=1&creator=${encodeURIComponent(result.slug || result.pwaUrl.split("/").filter(Boolean).pop() || "")}`}>Manage fitness workouts ↗</a>
+            )}
             <form className="simple-setup-email" onSubmit={openOutreachDraft}>
               <label htmlFor="creator-outreach-email">Prepare an outreach email</label>
               <p>Enter the creator’s business email. We’ll open a draft with a generic greeting and the PWA link.</p>
@@ -720,7 +726,7 @@ function SimpleCreatorSetup({ admin }: { admin: AdminRequest }) {
             </form>
           </section>
         )}
-        <p className="simple-setup-note">Public metadata is imported automatically. Transcripts and derived recipe steps require creator authorization.</p>
+        <p className="simple-setup-note">Public metadata is imported automatically. Fitness workouts come from the separate exercise library and creator-reviewed programs; transcripts and derived cooking steps require creator authorization.</p>
       </main>
       <footer className="simple-setup-footer">
         <a href="/admin?advanced=1">Advanced controls</a>
@@ -838,7 +844,8 @@ export default function AdminApp() {
     try {
       const list = await admin<Creator[]>("/creators");
       setCreators(list);
-      setSelectedId((current) => current || list[0]?.id || "");
+      const requested = new URLSearchParams(location.search).get("creator");
+      setSelectedId((current) => current || list.find((item) => item.slug === requested || item.id === requested)?.id || list[0]?.id || "");
       setMessage("");
     } catch (error) {
       setMessage(adminRequestMessage(error));
@@ -851,7 +858,7 @@ export default function AdminApp() {
     loadCreators();
   }, [token, advancedMode]);
   useEffect(() => {
-    if (!advancedMode || !selectedId) return;
+    if (!advancedMode || !selectedId || !selected || selected.category === "fitness") return;
     Promise.all([
       admin<Metrics>(`/metrics/${selectedId}`),
       admin<Gate[]>(`/gates/${selectedId}`),
@@ -881,7 +888,7 @@ export default function AdminApp() {
         setQualityFindings(findings.findings);
       })
       .catch((error: Error) => setMessage(error.message));
-  }, [selectedId, token, advancedMode]);
+  }, [selectedId, selected?.category, token, advancedMode]);
   async function run(action: () => Promise<unknown>, success: string) {
     setBusy(true);
     setMessage("");
@@ -899,6 +906,7 @@ export default function AdminApp() {
       id?: string;
       slug?: string;
       platform?: string;
+      vertical?: "cooking" | "fitness";
       pwaUrl?: string;
       contentImport?: { status?: string; processed?: number; error?: string };
       tasks?: Array<{ roleKey: string; status: string; error?: string }>;
@@ -909,6 +917,7 @@ export default function AdminApp() {
         id: string;
         slug: string;
         platform: string;
+        vertical: "cooking" | "fitness";
         pwaUrl: string;
         contentImport?: { status?: string; processed?: number; error?: string };
         tasks?: Array<{ roleKey: string; status: string; error?: string }>;
@@ -919,7 +928,7 @@ export default function AdminApp() {
       setSelectedId(created.id);
       setResearchUrl(creatorUrl || "");
       setChannelId(creatorUrl || "");
-      setTab(importResult.processed ? "content" : "operations");
+      setTab(created.vertical === "fitness" ? "overview" : importResult.processed ? "content" : "operations");
       setNewCreatorUrl("");
     }, "Creator PWA setup started.");
     if (setupResult.pwaUrl) {
@@ -930,7 +939,9 @@ export default function AdminApp() {
         : setupResult.platform === "other"
           ? " This source needs a supported connector or authorized upload before content can be added."
           : "";
-      setMessage(`PWA ready at ${setupResult.pwaUrl}. ${imported} public content items imported; ${setupResult.tasks?.length || 0} setup agents started${failedTasks ? `, ${failedTasks} need attention` : ""}.${connectorNote}`);
+      setMessage(setupResult.vertical === "fitness"
+        ? `Fitness PWA ready at ${setupResult.pwaUrl}. Open Workouts to create the first routine.${connectorNote}`
+        : `PWA ready at ${setupResult.pwaUrl}. ${imported} public content items imported; ${setupResult.tasks?.length || 0} setup agents started${failedTasks ? `, ${failedTasks} need attention` : ""}.${connectorNote}`);
     }
   }
   if (!advancedMode) return <SimpleCreatorSetup admin={admin} />;
@@ -1146,7 +1157,13 @@ export default function AdminApp() {
               <div className="admin-workspace-row" key={creator.id}>
                 <button
                   className={creator.id === selectedId ? "active" : ""}
-                  onClick={() => setSelectedId(creator.id)}
+                  onClick={() => {
+                    setSelectedId(creator.id);
+                    setTab("overview");
+                    const url = new URL(location.href);
+                    url.searchParams.set("creator", creator.slug);
+                    history.replaceState(null, "", url);
+                  }}
                 >
                   {creator.name}
                   <small>
@@ -1186,7 +1203,7 @@ export default function AdminApp() {
         </aside>
         <main className="admin-main">
           <div className="admin-title">
-            <p className="eyebrow">INTERNAL CONTROL ROOM</p>
+            <p className="eyebrow">{selected?.category === "fitness" ? "FITNESS CONTROL ROOM" : "INTERNAL CONTROL ROOM"}</p>
             <h1>{selected?.name || "Choose a creator"}</h1>
             <p>
               {selected?.slug || "Protected operator workspace"}
@@ -1236,6 +1253,15 @@ export default function AdminApp() {
           )}
           {selected && (
             <>
+              {selected.category === "fitness" ? (
+                <FitnessAdminWorkspace
+                  key={selected.id}
+                  creator={selected}
+                  admin={admin}
+                  brandEditor={<BrandEditor key={selected.id} creator={selected} busy={busy} onSave={saveIdentity} />}
+                />
+              ) : (
+              <>
               <div className="admin-tabs">
                 {(
                   [
@@ -2096,6 +2122,8 @@ export default function AdminApp() {
                     )}
                   </section>
                 </div>
+              )}
+              </>
               )}
             </>
           )}

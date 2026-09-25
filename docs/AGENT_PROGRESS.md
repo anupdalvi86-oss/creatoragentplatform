@@ -82,3 +82,11 @@ The intended Telegram experience is now represented by the platform runtime: Her
 - Added separate fitness audience sessions and D1 records in additive migration `0007_fitness.sql`; no new specialist agents or provider infrastructure.
 - Exercise metadata follows the catalog's MIT notice; video rights are separate. The owner confirmed app-specific use of the source-hosted exercise videos on 2026-09-25. Background notification delivery and payment checkout are not configured.
 - The owner explicitly requested no tests or test commands for this change. Typecheck, lint and dry-run build are the requested checks.
+
+## 2026-09-25 — Fitness administration
+
+- Split the advanced admin workspace by vertical. Fitness now has its own overview, workout program list and editor entry points, owner review queue, community moderation, branding and creator membership controls. Cooking agents, recipe content and monetization controls remain in the cooking workspace.
+- Added a direct fitness workspace link after Build PWA and editor deep links for new and existing programs. A creator builds day-by-day routines in the existing catalog-backed studio, submits them for owner review, and publishes approved programs to the audience.
+- Added aggregate fitness completion and participant counts to the protected admin API. Activation now checks for a published fitness program rather than cooking source content.
+- Reconciled stale documentation: the deployed studio path is under `/api/admin/fitness-studio/*`, and fitness setup does not dispatch the 32 cooking specialist handlers.
+- No migration or new provider is required. The owner's earlier instruction to skip tests remains in effect; typecheck, lint and dry-run build are used for this change.
